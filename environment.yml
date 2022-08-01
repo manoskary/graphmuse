@@ -1,0 +1,14 @@
+name: graphmuse
+channels:
+  - default
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.10
+  - pytorch
+  - cpuonly
+  - pip
+  - pip:
+    - numpy
+    - cython
+    - git+https://github.com/CPJKU/partitura.git@develop
