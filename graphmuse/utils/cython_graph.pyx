@@ -8,7 +8,7 @@ import numpy as np
 cimport numpy as np
 from libc.math cimport fabs
 from libcpp.vector cimport vector
-# from libcpp.algorithm cimport find
+from libcpp.map import find
 
 cimport graphmuse.utils.cython_utils as cutils
 import graphmuse.utils.cython_utils as cutils
@@ -48,34 +48,19 @@ cdef class CreateG:
         self.dst = vector[int]()
         self.num_proc = num_proc
 
-
-    # cdef void create_edges(self, int N, int idx) nogil:
-    #     cdef int j = 0
-    #
-    #     for j in range(N):
-    #         if isclose(self.onset_beat[j], self.onset_beat[idx]) and self.pitch[j] != self.pitch[idx]:
-    #             self.src.push_back(idx)
-    #             self.dst.push_back(j)
-    #
-    #         if isclose(self.onset_beat[j], self.onset_beat[idx] + self.duration_beat[idx]):
-    #             self.src.push_back(idx)
-    #             self.dst.push_back(j)
-    #
-    #         if (self.onset_beat[idx] < self.onset_beat[j]) and (self.onset_beat[idx] + self.duration_beat[idx] > self.onset_beat[j]):
-    #             self.src.push_back(idx)
-    #             self.dst.push_back(j)
-
-    cdef void create_edges(self, int N, int idx) nogil:
+    cdef void create_edges(self, int N, int idx, vector[int] src, vector[int] dst) nogil:
         cdef int j = 0
-        cdef int v = 1
 
         for j in range(N):
             if isclose(self.onset_beat[j], self.onset_beat[idx]) and self.pitch[j] != self.pitch[idx]:
-                self.adj[idx][j] = v
+                src.push_back(idx)
+                dst.push_back(j)
             if isclose(self.onset_beat[j], self.onset_beat[idx] + self.duration_beat[idx]):
-                self.adj[idx][j] = v
+                src.push_back(idx)
+                dst.push_back(j)
             if (self.onset_beat[idx] < self.onset_beat[j]) and (self.onset_beat[idx] + self.duration_beat[idx] > self.onset_beat[j]):
-                self.adj[idx][j] = v
+                src.push_back(idx)
+                dst.push_back(j)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -94,18 +79,27 @@ cdef class CreateG:
         cdef np.ndarray[float, ndim=1] uniques = np.sort(np.unique(end_times))[:-1]
         cdef np.ndarray[int, ndim=1] tmp
         cdef np.ndarray[int, ndim=2] edges
-
-        cdef np.ndarray[int, ndim=2] adj = np.zeros((N, N))
-        cutils.npymatrix2vec_int(adj, self.adj)
+        cdef int workload = N // num_proc
+        cdef int wbegin
+        cdef int wend
+        cdef vector[vector[int]] src_buffers
+        cdef vector[vector[int]] dst_buffers
 
         with nogil, parallel(num_threads=num_proc):
-            for p in prange(N, schedule='dynamic'):
-                self.create_edges(N, p)
-        # _len = len(self.src)
-        # self.src.swap(vector[vector[int]](_len))
-        # self.dst.swap(vector[vector[int]](_len))
+            for p in prange(num_proc, schedule='dynamic'):
+                wbegin = workload*p
+                wend = workload*(p+1)
+                for i in range(wbegin, wend, 1):
+                    self.create_edges(N, i, src_buffers[p], dst_buffers[p])
 
+        for i in range(num_proc):
+            M = src_buffers[i].size()
+            for j in range(M):
+                self.src.push_back(src_buffers[i][j])
+                self.dst.push_back(dst_buffers[i][j])
 
+        i = 0
+        j = 0
         p = 0
         M = len(uniques)
         # Try to make this parallelized.
