@@ -5,7 +5,7 @@ import numpy
 from Cython.Build import cythonize
 
 dirname = os.path.dirname(__file__)
-graph = os.path.join(dirname, "graphmuse", "utils", "create_graph.pyx")
+graph = [os.path.join(dirname, "graphmuse", "utils", x) for x in ["cython_graph.pyx", "cython_utils.pyx", "cython_sampler.pyx"]]
 # module = setuptools.Extension('graph', sources=[graph])
 module = cythonize(graph)
 
