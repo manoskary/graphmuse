@@ -30,11 +30,6 @@ cdef inline void npy2vec_int(np.ndarray[int,ndim=1,mode='c'] nda, vector[int]& v
     cdef int* vec_c = &(nda[0])
     vec.assign(vec_c,vec_c+size)
 
-cdef inline void npymatrix2vec_int(np.ndarray[int, ndim=2, mode='c']nda, vector[vector[int]]& vec):
-    cdef int size = nda.size
-    cdef int* vec_c = &(nda[0, 0])
-    vec.assign(vec_c, vec_c+size)
-
 cdef inline void npy2vec_float(np.ndarray[float,ndim=1,mode='c'] nda, vector[float]& vec):
     cdef int size = nda.size
     cdef float* vec_c = &(nda[0])
