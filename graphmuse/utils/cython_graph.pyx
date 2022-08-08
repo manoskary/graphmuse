@@ -187,7 +187,7 @@ cdef class GraphFromAdj:
         # cdef vector[float].iterator it
         # cdef vector[float].iterator it_end
         # cdef vector[float].iterator find
-        cdef np.ndarray[float, ndim=1, mode='c'] ob = np.ndarray(self.onset_beat)
+        cdef np.ndarray[float, ndim=1, mode='c'] ob = np.ascontiguousarray(self.onset_beat, dtype=np.float32)
         cdef int* adj = <int *>PyMem_Malloc(N*N*sizeof(int))
 
         # cutils.npymatrix2vec_int(adj, self.adj)
@@ -211,8 +211,8 @@ cdef class GraphFromAdj:
             T = np.count_nonzero(np.isin(ob, et))
             if T > 0:
                 scr = np.where(end_times == et)[0]
-                diffs = np.diff(ob, et)
-                tmp = np.where(diffs > 0, diffs, INF)
+                diffs = np.subtract(ob, et, dtype=np.float32)
+                tmp = np.where(diffs > 0.0, diffs, INF)
                 tmp_min = tmp.min()[0]
                 dst = np.where(tmp == tmp_min)[0]
                 T = scr.shape[0]

@@ -63,7 +63,7 @@ if __name__ == '__main__':
     import partitura as pt
     from timeit import default_timer as timer
 
-    score_dir = "/home/manos/Desktop/JKU/data/mozart_piano_sonatas/K279-1.musicxml"
+    score_dir = "/home/manos/Desktop/JKU/data/test.musicxml"
     note_array = pt.load_score(score_dir).note_array()
 
     # lst = []
