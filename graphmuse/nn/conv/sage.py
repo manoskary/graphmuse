@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-
+from torch_scatter import scatter
 
 class SageConvLayer(nn.Module):
     def __init__(self, in_features, out_features, bias=False):
@@ -30,4 +30,22 @@ class SageConvLayer(nn.Module):
         else:
             h = torch.mm(adj, h) / (adj.to_dense().sum(dim=1).reshape(adj.shape[0], -1) + 1)
         z = self.linear(torch.cat([features, h], dim=-1))
+        return z
+
+    def forward_edge_index(self, features, edge_index):
+        """
+        This is the forward pass for the edge_index version of adjacency.
+
+        It is in the style of PYG.
+
+        Parameters
+        ----------
+        features : torch.Tensor
+            The node features.
+        edge_index : torch.LongTensor
+            The edge indices size (2, num_edges).
+        """
+        h = self.neigh_linear(features)[edge_index[1]]
+        s = scatter(scr=h, index=edge_index[0], dim=0, dim_size=features.size(0), reduce='mean')
+        z = self.linear(torch.cat([features, s], dim=-1))
         return z
