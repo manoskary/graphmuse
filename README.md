@@ -1,9 +1,37 @@
 # GraphMuse
-A Graph Deep Learning Library for Music.
+GraphMuse is a Graph Deep Learning Library for Music.
 
 This library intents to address Graph Deep Learning techniques and models applied specifically on Music Scores.
 
-### Usage
+It contains a core set of graph-based music representations, such as a Heterogeneous and a Homogeneous Score Graph class.
+It includes functionalities for this graphs such as saving, loading and batching graphs together.
+
+The main core of the library includes accelarated SOTA sampling strategies for Large Graphs, 
+which are implemented in C++ and CUDA. 
+
+
+It implements a variety of graph neural networks for music, including Graph Convolutional Networks (GCN), Graph Attention Networks (GAT), GraphSAGE, and Graph Isomorphism Networks (GIN).
+It also implements a variety of graph neural networks for music, including Graph Convolutional Networks (GCN), Graph Attention Networks (GAT), GraphSAGE, and Graph Isomorphism Networks (GIN).
+Modules of the library contain implementations of the following models:
+- Contrastive Graph Neural Networks similar to SimCLR;
+- Hierachical Graph Auto-Encoders with edge Polling;
+- Hyperbolic Graph Neural Networks with Poincare Topology.
+
+### Dependencies
+
+GraphMuse is built on top of PyTorch. Some additional dependencies are required to run the code:
+- PyTorch Sparse
+- PyTorch Scatter
+
+
+## Installation
+
+```shell
+pip install graphmuse
+```
+
+
+## Usage
 
 **Convolution**
 ```python
