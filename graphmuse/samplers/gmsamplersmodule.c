@@ -610,7 +610,7 @@ static struct PyModuleDef GMSamplersmodule = {
 	GMSamplersMethods
 };
 
-PyMODINIT_FUNC PyInit_gmsamplers(){
+PyMODINIT_FUNC PyInit_samplers(){
 	if(PyType_Ready(&GraphType) < 0)
 		return NULL;
 
