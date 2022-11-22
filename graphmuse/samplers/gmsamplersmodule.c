@@ -10,8 +10,8 @@ typedef uint32_t uint;
 
 
 
-static uint GraphMuse_memory_canvas_size = 256;
-static void* GraphMuse_memory_canvas;
+static uint GMSamplers_memory_canvas_size = 256;
+static void* GMSamplers_memory_canvas;
 
 
 
@@ -50,8 +50,8 @@ static PyMethodDef Node_methods[]={
 
 static PyTypeObject NodeType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "GraphMuse.Node",
-    .tp_doc = PyDoc_STR("GraphMuse graph node"),
+    .tp_name = "GMSamplers.Node",
+    .tp_doc = PyDoc_STR("GMSamplers graph node"),
     .tp_basicsize = sizeof(Node),
     .tp_itemsize = 0,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -221,8 +221,8 @@ static PyMethodDef Graph_methods[] = {
 
 static PyTypeObject GraphType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "GraphMuse.Graph",
-    .tp_doc = PyDoc_STR("GraphMuse graph"),
+    .tp_name = "GMSamplers.Graph",
+    .tp_doc = PyDoc_STR("GMSamplers graph"),
     .tp_basicsize = sizeof(Graph),
     .tp_itemsize = 0,
     .tp_flags = Py_TPFLAGS_DEFAULT,
@@ -405,7 +405,7 @@ static PyObject* NodeHashSet_to_pylist(NodeHashSet* node_hash_set){
 }
 
 
-static PyObject* GraphMuse_sample_neighbors_pylist(PyObject* graph_muse, PyObject* args){
+static PyObject* GMSamplers_sample_neighbors_pylist(PyObject* graph_muse, PyObject* args){
 	uint depth, samples_per_node;
 	PyObject* target_nodes = Py_None;
 	Graph* graph;
@@ -454,23 +454,15 @@ static PyObject* GraphMuse_sample_neighbors_pylist(PyObject* graph_muse, PyObjec
 		node_hash_set.capacity = MACRO_MIN(samples_per_node, graph->node_count)*pow(samples_per_node, depth);
 
 
-		// NOTE: this should be done with a persistent, global allocation strategy!
-		node_tracker.nodes = (Node*)malloc(samples_per_node*sizeof(Node));
+		NodeHashSet_new(&load_set, MACRO_MIN(graph->node_count, node_hash_set.capacity));
 
-		
-
-		for(uint sample=0; sample<MACRO_MIN(samples_per_node, graph->node_count); sample++){
+		uint upper_bound = MACRO_MIN(samples_per_node, graph->node_count);
+		for(uint sample=0; sample<upper_bound; sample++){
 			Node* node_sample = (Node*) PyObject_New(Node, &NodeType);
-
-			// for(;;){
-			// 	node_sample->index = rand()%graph->node_count;
-			// 	if(add_succesfully(&node_tracker, node_sample))
-			// 		break;
-			// }
 
 			for(;;){
 				node_sample->index = rand()%graph->node_count;
-				if(add_succesfully(&node_tracker, node_sample))
+				if(NodeHashSet_add(&load_set, node_sample))
 					break;
 			}
 			
@@ -489,15 +481,19 @@ static PyObject* GraphMuse_sample_neighbors_pylist(PyObject* graph_muse, PyObjec
 
 		PyList_SET_ITEM(samples_per_layer, depth, target_nodes);
 
-		node_tracker.nodes = (Node*)malloc(samples_per_node*sizeof(Node));
+		
 		
 		node_hash_set.capacity = prev_size*pow(samples_per_node, depth);
 
-		
+		NodeHashSet_new(&load_set, MACRO_MIN(graph->node_count, node_hash_set.capacity));
+
+		for(uint n=0; n<prev_size; n++)
+			NodeHashSet_add(&load_set, (Node*)PyList_GET_ITEM(target_nodes, n));
 	}
 
 	NodeHashSet_new(&node_hash_set, MACRO_MIN(graph->node_count, node_hash_set.capacity));
-	NodeHashSet_new(&load_set, node_hash_set.capacity);
+	node_tracker.nodes = (Node*)malloc(samples_per_node*sizeof(Node));
+	
 
 	for(uint layer=depth;layer>0; layer--){
 		PyObject* prev_layer = PyList_GET_ITEM(samples_per_layer, layer);
@@ -601,27 +597,27 @@ static PyObject* GraphMuse_sample_neighbors_pylist(PyObject* graph_muse, PyObjec
 
 
 
-static PyMethodDef GraphMuseMethods[] = {
-	{"sample_neighbors", GraphMuse_sample_neighbors_pylist, METH_VARARGS, "Random neighbor sampling within a graph through multiple layers."},
+static PyMethodDef GMSamplersMethods[] = {
+	{"sample_neighbors", GMSamplers_sample_neighbors_pylist, METH_VARARGS, "Random neighbor sampling within a graph through multiple layers."},
 	{NULL, NULL, 0, NULL}
 };
 
-static struct PyModuleDef GraphMusemodule = {
+static struct PyModuleDef GMSamplersmodule = {
 	PyModuleDef_HEAD_INIT,
-	"graphmuse",
+	"gmsamplers",
 	NULL,
 	-1,
-	GraphMuseMethods
+	GMSamplersMethods
 };
 
-PyMODINIT_FUNC PyInit_graphmuse(){
+PyMODINIT_FUNC PyInit_gmsamplers(){
 	if(PyType_Ready(&GraphType) < 0)
 		return NULL;
 
 	if(PyType_Ready(&NodeType) < 0)
 		return NULL;
 
-	PyObject* module = PyModule_Create(&GraphMusemodule);
+	PyObject* module = PyModule_Create(&GMSamplersmodule);
 
 	if(module==NULL)
 		return NULL;
@@ -643,7 +639,7 @@ PyMODINIT_FUNC PyInit_graphmuse(){
 		return NULL;
 	}
 
-	GraphMuse_memory_canvas = malloc(GraphMuse_memory_canvas_size);
+	GMSamplers_memory_canvas = malloc(GMSamplers_memory_canvas_size);
 
 	return module;
 }

@@ -2,56 +2,56 @@
 
 # sys.settrace()
 
-import graphmuse
+import gmsamplers
 
 edge_list = [
-	(graphmuse.Node(0), graphmuse.Node(1)),
-	#(graphmuse.Node(0), graphmuse.Node(9)),
-	(graphmuse.Node(1), graphmuse.Node(2)),
-	#(graphmuse.Node(1), graphmuse.Node(8)),
-	(graphmuse.Node(2), graphmuse.Node(3)),
-	#(graphmuse.Node(2), graphmuse.Node(7)),
-	#(graphmuse.Node(3), graphmuse.Node(4)),
-	(graphmuse.Node(3), graphmuse.Node(6)),
-	#(graphmuse.Node(4), graphmuse.Node(5)),
-	(graphmuse.Node(5), graphmuse.Node(4)),
-	(graphmuse.Node(5), graphmuse.Node(6)),
-	#(graphmuse.Node(6), graphmuse.Node(7)),
-	(graphmuse.Node(6), graphmuse.Node(3)),
-	#(graphmuse.Node(7), graphmuse.Node(8)),
-	#(graphmuse.Node(7), graphmuse.Node(2)),
-	(graphmuse.Node(8), graphmuse.Node(9)),
-	(graphmuse.Node(8), graphmuse.Node(1)),
-	#(graphmuse.Node(9), graphmuse.Node(0)),
-	(graphmuse.Node(0), graphmuse.Node(0)),
-	#(graphmuse.Node(0), graphmuse.Node(8)),
-	(graphmuse.Node(1), graphmuse.Node(1)),
-	(graphmuse.Node(1), graphmuse.Node(7)),
-	#(graphmuse.Node(2), graphmuse.Node(2)),
-	(graphmuse.Node(2), graphmuse.Node(6)),
-	#(graphmuse.Node(3), graphmuse.Node(3)),
-	(graphmuse.Node(3), graphmuse.Node(5)),
-	(graphmuse.Node(4), graphmuse.Node(4)),
-	#(graphmuse.Node(5), graphmuse.Node(3)),
-	(graphmuse.Node(5), graphmuse.Node(5)),
-	#(graphmuse.Node(6), graphmuse.Node(6)),
-	(graphmuse.Node(6), graphmuse.Node(2)),
-	(graphmuse.Node(7), graphmuse.Node(7)),
-	#(graphmuse.Node(7), graphmuse.Node(1)),
-	#(graphmuse.Node(8), graphmuse.Node(8)),
-	(graphmuse.Node(8), graphmuse.Node(0)),
-	#(graphmuse.Node(9), graphmuse.Node(9))
+	(gmsamplers.Node(0), gmsamplers.Node(1)),
+	#(gmsamplers.Node(0), gmsamplers.Node(9)),
+	(gmsamplers.Node(1), gmsamplers.Node(2)),
+	#(gmsamplers.Node(1), gmsamplers.Node(8)),
+	(gmsamplers.Node(2), gmsamplers.Node(3)),
+	#(gmsamplers.Node(2), gmsamplers.Node(7)),
+	#(gmsamplers.Node(3), gmsamplers.Node(4)),
+	(gmsamplers.Node(3), gmsamplers.Node(6)),
+	#(gmsamplers.Node(4), gmsamplers.Node(5)),
+	(gmsamplers.Node(5), gmsamplers.Node(4)),
+	(gmsamplers.Node(5), gmsamplers.Node(6)),
+	#(gmsamplers.Node(6), gmsamplers.Node(7)),
+	(gmsamplers.Node(6), gmsamplers.Node(3)),
+	#(gmsamplers.Node(7), gmsamplers.Node(8)),
+	#(gmsamplers.Node(7), gmsamplers.Node(2)),
+	(gmsamplers.Node(8), gmsamplers.Node(9)),
+	(gmsamplers.Node(8), gmsamplers.Node(1)),
+	#(gmsamplers.Node(9), gmsamplers.Node(0)),
+	(gmsamplers.Node(0), gmsamplers.Node(0)),
+	#(gmsamplers.Node(0), gmsamplers.Node(8)),
+	(gmsamplers.Node(1), gmsamplers.Node(1)),
+	(gmsamplers.Node(1), gmsamplers.Node(7)),
+	#(gmsamplers.Node(2), gmsamplers.Node(2)),
+	(gmsamplers.Node(2), gmsamplers.Node(6)),
+	#(gmsamplers.Node(3), gmsamplers.Node(3)),
+	(gmsamplers.Node(3), gmsamplers.Node(5)),
+	(gmsamplers.Node(4), gmsamplers.Node(4)),
+	#(gmsamplers.Node(5), gmsamplers.Node(3)),
+	(gmsamplers.Node(5), gmsamplers.Node(5)),
+	#(gmsamplers.Node(6), gmsamplers.Node(6)),
+	(gmsamplers.Node(6), gmsamplers.Node(2)),
+	(gmsamplers.Node(7), gmsamplers.Node(7)),
+	#(gmsamplers.Node(7), gmsamplers.Node(1)),
+	#(gmsamplers.Node(8), gmsamplers.Node(8)),
+	(gmsamplers.Node(8), gmsamplers.Node(0)),
+	#(gmsamplers.Node(9), gmsamplers.Node(9))
 ]
 
 edge_list.sort(key=lambda t: t[0].index())
 
-graph = graphmuse.Graph(edge_list)
+graph = gmsamplers.Graph(edge_list)
 
 graph.print()
 
-target=[graphmuse.Node(1), graphmuse.Node(9)]
+target=None#[gmsamplers.Node(1), gmsamplers.Node(9)]
 
-samples_per_layer, edge_indices_between_layers, load_per_layer = graphmuse.sample_neighbors(graph, 5, 2, target)
+samples_per_layer, edge_indices_between_layers, load_per_layer = gmsamplers.sample_neighbors(graph, 5, 2, target)
 
 
 
