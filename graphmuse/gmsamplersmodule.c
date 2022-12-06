@@ -16,49 +16,58 @@ static void* GMSamplers_memory_canvas;
 
 
 typedef struct {
-	PyObject_HEAD
+	//PyObject_HEAD
 	uint index;
 } Node;
 
-static int Node_init(Node* node, PyObject* args, PyObject* kwds){
-	uint index;
-
-	if(!PyArg_ParseTuple(args, "I", &index)){
-		printf("can't init Node if args are shite\n");
-		return -1;
-	}
-
-	node->index = index;
-
-	return 0;
+static PyObject* node_to_pylong(Node n){
+	return PyLong_FromUnsignedLong((unsigned long)n.index);
 }
 
-
-static PyObject* Node_index(Node* node, PyObject *Py_UNUSED(ignored)){
-	return Py_BuildValue("I", node->index);
+static Node pylong_to_node(PyObject* pl){
+	Node n = {(uint)PyLong_AsUnsignedLong(pl)};
+	return n;
 }
+
+// static int Node_init(Node* node, PyObject* args, PyObject* kwds){
+// 	uint index;
+
+// 	if(!PyArg_ParseTuple(args, "I", &index)){
+// 		printf("can't init Node if args are shite\n");
+// 		return -1;
+// 	}
+
+// 	node->index = index;
+
+// 	return 0;
+// }
+
+
+// static PyObject* Node_index(Node* node, PyObject *Py_UNUSED(ignored)){
+// 	return Py_BuildValue("I", node->index);
+// }
 
 static uint Node_hash(Node* n){
 	return n->index;
 }
 
-static PyMethodDef Node_methods[]={
-	{"index", (PyCFunction)Node_index, METH_NOARGS, "Return the index of graph node"},
-	{NULL}
-};
+// static PyMethodDef Node_methods[]={
+// 	{"index", (PyCFunction)Node_index, METH_NOARGS, "Return the index of graph node"},
+// 	{NULL}
+// };
 
 
-static PyTypeObject NodeType = {
-	PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "GMSamplers.Node",
-    .tp_doc = PyDoc_STR("GMSamplers graph node"),
-    .tp_basicsize = sizeof(Node),
-    .tp_itemsize = 0,
-    .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_new = PyType_GenericNew,
-    .tp_init = (initproc) Node_init,
-    .tp_methods = Node_methods,
-};
+// static PyTypeObject NodeType = {
+// 	PyVarObject_HEAD_INIT(NULL, 0)
+//     .tp_name = "GMSamplers.Node",
+//     .tp_doc = PyDoc_STR("GMSamplers graph node"),
+//     .tp_basicsize = sizeof(Node),
+//     .tp_itemsize = 0,
+//     .tp_flags = Py_TPFLAGS_DEFAULT,
+//     .tp_new = PyType_GenericNew,
+//     .tp_init = (initproc) Node_init,
+//     .tp_methods = Node_methods,
+// };
 
 
 
@@ -103,11 +112,13 @@ static PyObject* Graph_new(PyTypeObject* type, PyObject* args, PyObject* kwds){
 			//	estimate node count via max on edge list
 			node_count = 0;
 
-			Node* src;
-			Node* dst;
+			// Node* src;
+			// Node* dst;
+
+			uint src, dst;
 
 			for(uint e=0; e<PyList_GET_SIZE(edges); e++){
-				if(!PyArg_ParseTuple(PyList_GET_ITEM(edges, e), "OO", &src, &dst)){
+				if(!PyArg_ParseTuple(PyList_GET_ITEM(edges, e), "II", &src, &dst)){
 					printf("couldn't parse edge tuple");
 
 					//	TODO: cleanup
@@ -115,8 +126,8 @@ static PyObject* Graph_new(PyTypeObject* type, PyObject* args, PyObject* kwds){
 					return NULL;
 				}
 
-				node_count = MACRO_MAX(node_count, src->index);
-				node_count = MACRO_MAX(node_count, dst->index);
+				node_count = MACRO_MAX(node_count, src);
+				node_count = MACRO_MAX(node_count, dst);
 			}
 
 			node_count++;
@@ -156,18 +167,22 @@ static int Graph_init(Graph* graph, PyObject* args, PyObject* kwds){
 
 	uint cursor=0;
 	for(uint e=0; e<PyList_GET_SIZE(graph->edge_list); e++){
-		Node* src;
-		Node* dst;
+		// Node* src;
+		// Node* dst;
 
-		if(!PyArg_ParseTuple(PyList_GET_ITEM(graph->edge_list,e), "OO", &src, &dst)){
+		uint src, dst;
+
+		if(!PyArg_ParseTuple(PyList_GET_ITEM(graph->edge_list,e), "II", &src, &dst)){
 			puts("couldn't parse edge tuple");
 			return -1;
 		}
 
-		graph->row_offsets[src->index+1]++;
+		graph->row_offsets[src+1]++;
 		
 		// if edge is sorted in the first argument, graph init can be made much faster
-		graph->neighbors_per_row[cursor++]=*dst;
+		graph->neighbors_per_row[cursor].index=dst;
+
+		cursor++;
 	}
 
 	for(uint row=1; row+1<graph->node_count+1; row++)
@@ -394,10 +409,11 @@ static PyObject* NodeHashSet_to_pylist(NodeHashSet* node_hash_set){
 	uint cursor=0;
 	for(uint b=0; b<NodeHashSet_bucket_count; b++){
 		for(uint n=0; n<node_hash_set->buckets[b].tracked; n++){
-			Node* node = PyObject_New(Node, &NodeType);
-			node->index = node_hash_set->buckets[b].nodes[n].index;
+			// Node* node = PyObject_New(Node, &NodeType);
+			// node->index = node_hash_set->buckets[b].nodes[n].index;
 
-			PyList_SET_ITEM(pylist, cursor++, (PyObject*)node);
+			// PyList_SET_ITEM(pylist, cursor++, (PyObject*)node);
+			PyList_SET_ITEM(pylist, cursor++, node_to_pylong(node_hash_set->buckets[b].nodes[n]));
 		}
 	}
 
@@ -458,16 +474,17 @@ static PyObject* GMSamplers_sample_neighbors_pylist(PyObject* graph_muse, PyObje
 
 		uint upper_bound = MACRO_MIN(samples_per_node, graph->node_count);
 		for(uint sample=0; sample<upper_bound; sample++){
-			Node* node_sample = (Node*) PyObject_New(Node, &NodeType);
+			// Node* node_sample = (Node*) PyObject_New(Node, &NodeType);
+			Node node_sample;
 
 			for(;;){
-				node_sample->index = rand()%graph->node_count;
-				if(NodeHashSet_add(&load_set, node_sample))
+				node_sample.index = rand()%graph->node_count;
+				if(NodeHashSet_add(&load_set, &node_sample))
 					break;
 			}
 			
 
-			PyList_SET_ITEM(init_layer, sample, (PyObject*)node_sample);
+			PyList_SET_ITEM(init_layer, sample, node_to_pylong(node_sample));
 		}
 
 		PyList_SET_ITEM(samples_per_layer, depth, init_layer);
@@ -476,7 +493,7 @@ static PyObject* GMSamplers_sample_neighbors_pylist(PyObject* graph_muse, PyObje
 	}
 	else{
 		//TODO: what to do if target_nodes is not owned by the caller? 
-		// Py_INCREF(target_nodes);
+		Py_INCREF(target_nodes);
 		prev_size = PyList_GET_SIZE(target_nodes);
 
 		PyList_SET_ITEM(samples_per_layer, depth, target_nodes);
@@ -487,8 +504,11 @@ static PyObject* GMSamplers_sample_neighbors_pylist(PyObject* graph_muse, PyObje
 
 		NodeHashSet_new(&load_set, MACRO_MIN(graph->node_count, node_hash_set.capacity));
 
-		for(uint n=0; n<prev_size; n++)
-			NodeHashSet_add(&load_set, (Node*)PyList_GET_ITEM(target_nodes, n));
+		for(uint n=0; n<prev_size; n++){
+			Node node = pylong_to_node(PyList_GET_ITEM(target_nodes, n));
+			NodeHashSet_add(&load_set, &node);
+			// NodeHashSet_add(&load_set, (Node*)PyList_GET_ITEM(target_nodes, n));
+		}
 	}
 
 	NodeHashSet_new(&node_hash_set, MACRO_MIN(graph->node_count, node_hash_set.capacity));
@@ -505,14 +525,75 @@ static PyObject* GMSamplers_sample_neighbors_pylist(PyObject* graph_muse, PyObje
 		NodeHashSet_init(&node_hash_set);
 
 		for(uint n=0; n<prev_size; n++){
-			Node* node = (Node*)PyList_GET_ITEM(prev_layer, n);
+			// Node* node = (Node*)PyList_GET_ITEM(prev_layer, n);
+			Node node = pylong_to_node(PyList_GET_ITEM(prev_layer, n));
 
 
+			uint offset = graph->row_offsets[node.index];
+			uint row_count = graph->row_offsets[node.index+1]-graph->row_offsets[node.index];
 
-			uint offset = graph->row_offsets[node->index];
-			uint row_count = graph->row_offsets[node->index+1]-graph->row_offsets[node->index];
+			
+			if(row_count <= samples_per_node){
+				for(uint i=0; i<row_count; i++){
+					// Node* node_sample = PyObject_New(Node, &NodeType);
+					uint edge_index = offset + i;
+					
+					Node node_sample;
+					node_sample.index = graph->neighbors_per_row[edge_index].index;
 
-			if(row_count>samples_per_node){
+					NodeHashSet_add(&node_hash_set, &node_sample);
+					NodeHashSet_add(&load_set, &node_sample);
+
+					// PyList_SET_ITEM(new_layer, cursor, (PyObject*)node_sample);
+
+					PyList_SET_ITEM(edge_indices, cursor, PyLong_FromUnsignedLong((unsigned long)edge_index));
+
+					cursor++;
+				}
+			}
+			/*
+				expected number of attempts to insert a unique sample into set with k elements is n/(n-k)
+				for k=n*f, this results in 1/(1-f), meaning, if we want to limit the expected number of attempts
+				to let's say 4, f has to be at most 3/4=0.75
+
+				if this threshold is reached, random subset is sampled via random permutation
+				this is viable since memory waste is at most 25% (for temporary storage)
+			*/
+			else if(samples_per_node > (uint)(0.75*row_count)){
+				uint* perm = (uint*)malloc(sizeof(uint)*2*row_count);
+				for(uint i=0; i<row_count; i++){
+					perm[2*i]=graph->neighbors_per_row[offset+i].index;
+					perm[2*i+1]=offset+i;
+				}
+
+				for(uint i=0; i<samples_per_node; i++){
+					uint rand_i = i + rand()%(row_count-i);
+
+					uint tmp_node=perm[2*i], tmp_edge_index = perm[2*i+1];
+
+					perm[2*i]=perm[2*rand_i];
+					perm[2*i+1]=perm[2*rand_i+1];
+
+					perm[2*rand_i]=tmp_node;
+					perm[2*rand_i+1]=tmp_edge_index;
+
+					Node node_sample;
+					node_sample.index = perm[2*i];
+					uint edge_index = perm[2*i+1];
+
+					NodeHashSet_add(&node_hash_set, &node_sample);
+					NodeHashSet_add(&load_set, &node_sample);
+
+					// PyList_SET_ITEM(new_layer, cursor, (PyObject*)node_sample);
+
+					PyList_SET_ITEM(edge_indices, cursor, PyLong_FromUnsignedLong((unsigned long)edge_index));
+
+					cursor++;
+				}
+
+				free(perm);
+			}
+			else{
 				node_tracker.tracked = 0;
 				for(uint sample=0; sample<samples_per_node; sample++){
 					// Node* node_sample = PyObject_New(Node, &NodeType);
@@ -542,23 +623,6 @@ static PyObject* GMSamplers_sample_neighbors_pylist(PyObject* graph_muse, PyObje
 					PyObject* index_obj = PyLong_FromUnsignedLong((unsigned long)edge_index);
 
 					PyList_SET_ITEM(edge_indices, cursor, index_obj);
-
-					cursor++;
-				}
-			}else{
-				for(uint i=0; i<row_count; i++){
-					// Node* node_sample = PyObject_New(Node, &NodeType);
-					uint edge_index = offset + i;
-					
-					Node node_sample;
-					node_sample.index = graph->neighbors_per_row[edge_index].index;
-
-					NodeHashSet_add(&node_hash_set, &node_sample);
-					NodeHashSet_add(&load_set, &node_sample);
-
-					// PyList_SET_ITEM(new_layer, cursor, (PyObject*)node_sample);
-
-					PyList_SET_ITEM(edge_indices, cursor, PyLong_FromUnsignedLong((unsigned long)edge_index));
 
 					cursor++;
 				}
@@ -604,7 +668,7 @@ static PyMethodDef GMSamplersMethods[] = {
 
 static struct PyModuleDef GMSamplersmodule = {
 	PyModuleDef_HEAD_INIT,
-	"gmsamplers",
+	"samplers",
 	NULL,
 	-1,
 	GMSamplersMethods
@@ -614,8 +678,8 @@ PyMODINIT_FUNC PyInit_samplers(){
 	if(PyType_Ready(&GraphType) < 0)
 		return NULL;
 
-	if(PyType_Ready(&NodeType) < 0)
-		return NULL;
+	// if(PyType_Ready(&NodeType) < 0)
+	// 	return NULL;
 
 	PyObject* module = PyModule_Create(&GMSamplersmodule);
 
@@ -631,15 +695,15 @@ PyMODINIT_FUNC PyInit_samplers(){
 		return NULL;
 	}
 
-	Py_INCREF(&NodeType);
-	if(PyModule_AddObject(module, "Node", (PyObject*)&NodeType) < 0){
-		Py_DECREF(&NodeType);
-		Py_DECREF(&GraphType);
-		Py_DECREF(module);
-		return NULL;
-	}
+	// Py_INCREF(&NodeType);
+	// if(PyModule_AddObject(module, "Node", (PyObject*)&NodeType) < 0){
+	// 	Py_DECREF(&NodeType);
+	// 	Py_DECREF(&GraphType);
+	// 	Py_DECREF(module);
+	// 	return NULL;
+	// }
 
-	GMSamplers_memory_canvas = malloc(GMSamplers_memory_canvas_size);
+	// GMSamplers_memory_canvas = malloc(GMSamplers_memory_canvas_size);
 
 	return module;
 }

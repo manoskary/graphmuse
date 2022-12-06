@@ -3,13 +3,14 @@ import setuptools
 import os
 import numpy
 from Cython.Build import cythonize
-from distutils.core import setup, Extension
 
 dirname = os.path.dirname(__file__)
 graph = [os.path.join(dirname, "graphmuse", "utils", x) for x in ["cython_graph.pyx", "cython_utils.pyx", "cython_sampler.pyx"]]
 # module = setuptools.Extension('graph', sources=[graph])
 # module = cythonize(graph)
-module = [Extension("samplers", [os.path.join(dirname, "graphmuse", "samplers", "gmsamplersmodule.c")])]
+ext_modules = [
+    setuptools.Extension(
+        name="graphmuse.samplers", sources=[os.path.join("graphmuse", "gmsamplersmodule.c")])]
 
 os.environ["CC"] = "gcc"
 os.environ["CXX"] = "gcc"
@@ -28,7 +29,7 @@ setuptools.setup(
     ],
     include_dirs=[numpy.get_include()],
     # ext_modules=[module],
-    ext_modules= module,
+    ext_modules= ext_modules,
     author='Emmanouil Karystinaios',
     maintainer='Emmanouil Karystinaios'
 )
