@@ -10,10 +10,12 @@ graph = [os.path.join(dirname, "graphmuse", "utils", x) for x in ["cython_graph.
 # module = cythonize(graph)
 ext_modules = [
     setuptools.Extension(
-        name="graphmuse.samplers", sources=[os.path.join("graphmuse", "gmsamplersmodule.c")])]
+        name="graphmuse.samplers.csamplers", sources=[os.path.join("src", "gmsamplersmodule.c")])]
 
 os.environ["CC"] = "gcc"
 os.environ["CXX"] = "gcc"
+
+print(numpy.get_include())
 
 setuptools.setup(
     name='graphmuse',
@@ -27,7 +29,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Topic :: Scientific/Engineering :: Graph Deep Learning",
     ],
-    include_dirs=[numpy.get_include()],
+    include_dirs=[os.path.join(numpy.get_include(),"numpy")],
     # ext_modules=[module],
     ext_modules= ext_modules,
     author='Emmanouil Karystinaios',
