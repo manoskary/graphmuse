@@ -593,49 +593,6 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 }
 
 
-
-
-static PyObject* numpy_c_api_test(PyObject* csamplers, PyObject* args){
-	PyArrayObject* np_arr;
-
-	if(!PyArg_ParseTuple(args, "O", (PyObject**)&np_arr)){
-		printf("where ma numpy?!\n");
-		return NULL;
-	}
-
-	uint size = PyArray_DIM(np_arr, 1);
-	uint* data = (uint*)PyArray_GETPTR2(np_arr, 0, 0);
-
-	// while(size--)
-	// 	printf("%u\t", *data++);
-	// puts("");
-
-	// //PyArrayObject* np_arr = (PyArrayObject*)new_node_numpy(4);
-
-	// printf("shape size: %lu\n", PyArray_NDIM(np_arr));
-
-	// printf("dim 0 size: %lu\n", PyArray_DIM(np_arr, 0));
-
-	// printf("dim 0 stride: %lu\n", PyArray_STRIDE(np_arr, 0));
-
-	// printf("item size: %lu\n", PyArray_ITEMSIZE(np_arr));
-
-	// // printf("%u\n", *(uint*)PyArray_GETPTR2(np_arr, 0,0));
-
-	
-
-	// write_node_at(2, np_arr, 0);
-	// write_node_at(23, np_arr, 1);
-	// write_node_at(235, np_arr, 2);
-	// write_node_at(2357, np_arr, 3);
-
-
-
-
-	Py_RETURN_NONE;
-}
-
-
 static PyMethodDef GMSamplersMethods[] = {
 	{"sample_neighbors", GMSamplers_sample_neighbors, METH_VARARGS, "Random neighbor sampling within a graph through multiple layers."},
 	//{"np_test", numpy_c_api_test, METH_VARARGS, "how does numpy c api work? let's find out"},
