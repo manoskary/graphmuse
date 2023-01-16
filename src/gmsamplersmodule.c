@@ -146,7 +146,7 @@ static PyTypeObject GraphType = {
 		figure out how to do second hashing into a NodeTracker or how to replace linear search
 		issue is that size changes
 			- 	scale factors coprime to size (in order to visit all indices "randomly") would have to be computed every time size changes
-				(Extended Euclidean is linear in number of bits, so, might be fast enough)
+				(size - 1 is always coprime with size) 
 			- 	not sure how close remainders are if size increases, might make hashing pointless
 */
 
