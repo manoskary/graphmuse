@@ -28,7 +28,7 @@ static void* GMSamplers_memory_canvas;
 
 
 
-
+// this should be fine actually since it is used on random nodes
 static uint Node_hash(Node n){
 	return (uint)n;
 }
@@ -51,7 +51,7 @@ static void Graph_dealloc(Graph* graph){
 }
 
 static PyObject* Graph_new(PyTypeObject* type, PyObject* args, PyObject* kwds){
-	uint node_count = (uint)-1;
+	uint node_count;
 	PyArrayObject* edges;
 
 	//	ASSUMPTION: edge list should be sorted in the first argument
@@ -269,10 +269,10 @@ static int NodeHashSet_add_succesfully(NodeHashSet* nhs, Node n){
 							if dir = -1 = <-, read at first index
 					3. write in the opposite direction, this time specifically at the end of non-empty bucket
 						from the perspective of higher address bucket, hence the -1 in first branch
-			*/
+			
 			if(dir==1){
 				indirect_bt = full_bt;
-				read_index = full_bt->capacity-1;
+				read_index = full_bt->tracked-1;
 				write_index = -1;
 				
 			}
@@ -282,6 +282,12 @@ static int NodeHashSet_add_succesfully(NodeHashSet* nhs, Node n){
 				write_index = bt->tracked;
 				
 			}
+			*/
+
+
+			indirect_bt = MACRO_MAX(full_bt, bt); //TODO: should be completely branchless otherwise the branch in the comment above can be used for "more" readability
+			read_index = ((Index)(dir==1))*indirect_bt->tracked - (Index)(dir==1);
+			write_index = ((Index)(dir!=1))*indirect_bt->tracked - (Index)(dir==1);
 
 			indirect_bt->nodes[write_index] = indirect_bt->nodes[read_index];
 
@@ -290,6 +296,7 @@ static int NodeHashSet_add_succesfully(NodeHashSet* nhs, Node n){
 			/* 	NOTE: 	this isn't necessary since intermediate buckets keep their capacity
 						only the first and last bucket tradeoff capacity
 						however, this is left in a comment for completion
+			
 			full_bt->capacity++;
 			bt->capacity--;
 			*/
@@ -595,7 +602,6 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 
 static PyMethodDef GMSamplersMethods[] = {
 	{"sample_neighbors", GMSamplers_sample_neighbors, METH_VARARGS, "Random neighbor sampling within a graph through multiple layers."},
-	//{"np_test", numpy_c_api_test, METH_VARARGS, "how does numpy c api work? let's find out"},
 	{NULL, NULL, 0, NULL}
 };
 
