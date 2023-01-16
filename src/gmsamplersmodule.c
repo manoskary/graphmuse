@@ -1,5 +1,6 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#include <stdbool.h>
 
 #define PY_ARRAY_UNIQUE_SYMBOL sam_ARRAY_API
 #include <ndarraytypes.h>
@@ -33,6 +34,37 @@ static uint Node_hash(Node n){
 	return (uint)n;
 }
 
+
+static bool is_close(float a, float b){
+	return fabs(a-b)<=1E-6;
+}
+
+// TODO: ask Manos, should pitch really be float? Not sure if equality works as expected
+static bool adjacency_map(Index i, Index j, float* onset_beat, float* duration_beat, float* pitch){
+	int cond1 = isclose(onset_beat[i], onset_beat[j]) & (pitch[i] != pitch[j]);
+
+	int cond2 = isclose(onset_beat[i] + duration_beat[i], onset_beat[j]);
+
+	int cond3 = (onset_beat[i] < onset_beat[j]) & (onset_beat[j] < onset_beat[i] + duration_beat[i]);
+
+	return cond1 | cond2 | cond3;
+}
+
+
+static void count_neighbors(Index from, Index to, Index node_count, Index* neighbor_counts, float* onset_beat, float* duration_beat, float* pitch){
+	for(Index i=from; i<to; i++)
+		for(Index j=0; j<node_count; j++)
+			// need to account that neighbor_counts eventually gets accumulated to neighbor_offsets which is 0 at index 0
+			// hence i+1
+			neighbor_counts[i+1]+=(Index)adjacency_map(i,j, onset_beat, duration_beat, pitch);
+}
+
+static void fill_in_neighbors(Index from, Index to, Index node_count, Index* neighbor_counts, float* onset_beat, float* duration_beat, float* pitch){
+	// to is excluded from range
+	for(Index i=from; i<to; i++)
+		for(Index j=0; j<node_count; j++)
+			neighbor_counts[i]+=(Index)adjacency_map(i,j, onset_beat, duration_beat, pitch);
+}
 
 
 typedef struct{
@@ -93,11 +125,12 @@ static int Graph_init(Graph* graph, PyObject* args, PyObject* kwds){
 	uint edge_count = PyArray_DIM(edges, 1);
 	Node* src = (Node*)PyArray_DATA(edges);
 	
+	// TODO: MT or GPU
 	for(uint e=0; e<edge_count; e++){
     	graph->neighbor_offsets[Node_To_Index(src[e])+1]++;
     }
 
-
+    // TODO: SIMD
 	for(uint n=1; n+1<graph->node_count+1; n++)
 		graph->neighbor_offsets[n+1]+=graph->neighbor_offsets[n];
 
@@ -166,12 +199,12 @@ static Index NodeTracker_index(NodeTracker* nt, Node n){
 	return nt->capacity;
 }
 
-static int NodeTracker_add_succesfully(NodeTracker* nt, Node n){
+static bool NodeTracker_add_succesfully(NodeTracker* nt, Node n){
 	if(NodeTracker_index(nt, n) < nt->capacity)
-		return 0;
+		return false;
 
 	nt->nodes[nt->tracked++] = n;
-	return 1;
+	return true;
 }
 
 #define NodeHashSet_bucket_count 23 //should be prime
@@ -214,7 +247,7 @@ static uint NodeHashSet_size(NodeHashSet* node_hash_set){
 	return size;
 }
 
-static int NodeHashSet_add_succesfully(NodeHashSet* nhs, Node n){
+static bool NodeHashSet_add_succesfully(NodeHashSet* nhs, Node n){
 	int bucket_index = (int)Node_hash(n)%NodeHashSet_bucket_count;
 	
 	NodeTracker* bucket_tracker = nhs->buckets+bucket_index;
@@ -222,7 +255,7 @@ static int NodeHashSet_add_succesfully(NodeHashSet* nhs, Node n){
 	Index index = NodeTracker_index(bucket_tracker, n);
 
 	if(index < bucket_tracker->capacity){
-		return 0;
+		return false;
 	}
 
 	if(bucket_tracker->tracked == bucket_tracker->capacity){
@@ -309,7 +342,7 @@ static int NodeHashSet_add_succesfully(NodeHashSet* nhs, Node n){
 
 	bucket_tracker->nodes[bucket_tracker->tracked++] = n;
 
-	return 1;
+	return true;
 }
 
 
@@ -343,6 +376,7 @@ static PyObject* NodeHashSet_to_numpy(NodeHashSet* node_hash_set){
 
 	for(uint b=0; b<NodeHashSet_bucket_count; b++)
 		for(Index n=0; n<node_hash_set->buckets[b].tracked; n++)
+			//TODO: could probably be optimized with memcpy or copying with byte size different from sizeof(Node)
 			*copy_dst++ = node_hash_set->buckets[b].nodes[n];
 		
 
@@ -507,40 +541,23 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 				this is viable since memory waste is at most 25% (for temporary storage)
 			*/
 			else if(samples_per_node > (uint)(0.75*neighbor_count)){
-				char* perm = (char*)malloc((sizeof(Index)+sizeof(Node))*neighbor_count);
+				Index* perm = (Index*)malloc(sizeof(Index)*neighbor_count);
 
 				assert(perm);
 
-				for(Index i=0; i<neighbor_count; i++){
-					Node* node = (Node*)(perm + (sizeof(Index)+sizeof(Node))*i);
-					Index* index = (Index*)(node+1);
-					
-					*node=neighbors[i];
-					*index=i;
-				}
+				for(Index i=0; i<neighbor_count; i++)
+					perm[i]=i;
+				
 
 				for(Index i=0; i<samples_per_node; i++){
 					Index rand_i = i + rand()%(neighbor_count-i);
 
-					Node* node = (Node*)(perm + (sizeof(Index)+sizeof(Node))*i);
-					Index* index = (Index*)(node+1);
+					NodeHashSet_add_succesfully(&node_hash_set, neighbors[perm[rand_i]]);
+					NodeHashSet_add_succesfully(&load_set, neighbors[perm[rand_i]]);
 
-					Node* rand_node = (Node*)(perm + (sizeof(Index)+sizeof(Node))*rand_i);
-					Index* rand_index = (Index*)(rand_node+1);
+					edge_index_canvas[cursor++] = offset + perm[rand_i];
 
-					Node tmp_node = *node;
-					Index tmp_index = *index;
-
-					*node = *rand_node;
-					*index = *rand_index;
-
-					*rand_node = tmp_node;
-					*rand_index = tmp_index;
-
-					NodeHashSet_add_succesfully(&node_hash_set, *node);
-					NodeHashSet_add_succesfully(&load_set, *node);
-
-					edge_index_canvas[cursor++] = offset + *index;
+					perm[rand_i]=i;
 				}
 
 				free(perm);
@@ -638,5 +655,3 @@ PyMODINIT_FUNC PyInit_csamplers(){
 
 	return module;
 }
-
-
