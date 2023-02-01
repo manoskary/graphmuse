@@ -142,40 +142,41 @@ def batch_graphs(graphs):
 
 
 
-def graph_from_note_array(note_array, rest_array=None, norm2bar=True):
-    '''Turn note_array to homogeneous graph dictionary.
+def edges_from_note_array(note_array):
+    '''Turn note_array to list of edges.
+
     Parameters
     ----------
     note_array : structured array
         The partitura note_array object. Every entry has 5 attributes, i.e. onset_time, note duration, note velocity, voice, id.
-    rest_array : structured array
-        A structured rest array similar to the note array but for rests.
-    t_sig : list
-        A list of time signature in the piece.
+
+    Returns
+    -------
+    edg_src : np.array
+        The edges in the shape of (2, num_edges).
     '''
 
     edg_src = list()
     edg_dst = list()
     start_rest_index = len(note_array)
     for i, x in enumerate(note_array):
-        for j in np.where((np.isclose(note_array["onset_beat"], x["onset_beat"], rtol=1e-04, atol=1e-04) == True) & (note_array["pitch"] != x["pitch"]))[0]:
+        for j in np.where((note_array["onset_div"] == x["onset_div"]) & (note_array["id"] != x["id"]))[0]:
             edg_src.append(i)
             edg_dst.append(j)
 
-        for j in np.where(np.isclose(note_array["onset_beat"], x["onset_beat"] + x["duration_beat"], rtol=1e-04, atol=1e-04) == True)[0]:
+        for j in np.where(note_array["onset_div"] == x["onset_div"] + x["duration_div"])[0]:
             edg_src.append(i)
             edg_dst.append(j)
 
-
-        for j in np.where((x["onset_beat"] < note_array["onset_beat"]) & (x["onset_beat"] + x["duration_beat"] > note_array["onset_beat"]))[0]:
+        for j in np.where((x["onset_div"] < note_array["onset_div"]) & (x["onset_div"] + x["duration_div"] > note_array["onset_div"]))[0]:
             edg_src.append(i)
             edg_dst.append(j)
 
-    end_times = note_array["onset_beat"] + note_array["duration_beat"]
+    end_times = note_array["onset_div"] + note_array["duration_div"]
     for et in np.sort(np.unique(end_times))[:-1]:
-        if et not in note_array["onset_beat"]:
+        if et not in note_array["onset_div"]:
             scr = np.where(end_times == et)[0]
-            diffs = note_array["onset_beat"] - et
+            diffs = note_array["onset_div"] - et
             tmp = np.where(diffs > 0, diffs, np.inf)
             dst = np.where(tmp == tmp.min())[0]
             for i in scr:
