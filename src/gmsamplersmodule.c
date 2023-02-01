@@ -22,6 +22,13 @@ typedef uint32_t Index;
 typedef int32_t Int;
 #define Node_Eqv_In_Numpy NPY_UINT32
 #define Index_Eqv_In_Numpy NPY_UINT32
+#define EType_Eqv_In_Numpy NPY_UINT8
+
+typedef uint8_t EdgeType;
+#define Onset_Eq (uint8_t)0
+#define Onset_End_Eq (uint8_t)1
+#define Inbetween (uint8_t)2
+#define Closest_End (uint8_t)3
 
 #define Node_To_Index(n) (n)
 #define Index_To_Node(i) (i)
@@ -192,16 +199,14 @@ static void count_inverse_neighbors(Graph* graph, Index from, Index to, int* ons
 
 static void count_neighbors(Index node_count, Index* neighbor_counts, Index from, Index to, int* onset_div, int* duration_div){
 	for(Index i=from; i<to; i++){
-		//	ASSUMPTION: the adjecancy checks below also apply to i itself
-		// 	which means calloc is totally unnecessary
-		// also, init value 1
-		Index neighbor_count = 1;
+		Index neighbor_count = 0;
 
 		for(Int j=((Int)i)-1; j>=0; j--){
 			bool
-				cond1 = (onset_div[(Index)j] == onset_div[i]);
+				cond1 = (onset_div[(Index)j] == onset_div[i]),
+				cond3 = (onset_div[(Index)j] == onset_div[i] + duration_div[i]);
 
-			neighbor_count+= (Index)cond1;
+			neighbor_count += (Index)cond3 + (Index)cond1;
 
 			if(! cond1)
 				break;
@@ -209,20 +214,32 @@ static void count_neighbors(Index node_count, Index* neighbor_counts, Index from
 
 
 
-		Index j=i+1;
+		Index j=i;
 
 		for(;j<node_count; j++){
 			bool
 				cond1 = (onset_div[j] == onset_div[i]),
+				cond3 = (onset_div[j] == onset_div[i] + duration_div[i]);
+
+			neighbor_count += (Index)cond3 + (Index)cond1;
+
+			if(! cond1)
+				break;
+		}
+
+		Index j_star = j;
+
+		for(;j<node_count; j++){
+			bool
 				cond2 = (onset_div[j] < onset_div[i] + duration_div[i]);
 
-			neighbor_count+= (Index)cond1 + (Index)cond2;
+			neighbor_count+= (Index)cond2;
 
 			if(! cond2)
 				break;
 		}
 
-		if((j < node_count) & (onset_div[j] > onset_div[i] + duration_div[i])){
+		if((j < node_count) && (onset_div[j] > onset_div[i] + duration_div[i])){
 			int closest_from_above = onset_div[j];
 
 			for(;j<node_count; j++){
@@ -235,17 +252,20 @@ static void count_neighbors(Index node_count, Index* neighbor_counts, Index from
 					break;
 			}
 		}
-		else
+		else{
+			if(j == j_star)
+				j++;
 			for(;j<node_count; j++){
 				bool
+					cond1 = (onset_div[j] == onset_div[i]),
 					cond3 = (onset_div[j] == onset_div[i] + duration_div[i]);
 
-				neighbor_count += (Index)cond3;
+				neighbor_count += (Index)cond3 + (Index)cond1;
 
 				if(! cond3)
 					break;
 			}
-
+		}
 		neighbor_counts[i+1] = neighbor_count;
 	}
 }
@@ -255,6 +275,12 @@ static void neighbor_counts_to_offsets(Index node_count, Index* neighbor_counts)
 	for(Index n=1; n+1<node_count+1; n++)
 		neighbor_counts[n+1]+=neighbor_counts[n];
 }
+
+
+
+
+
+
 
 //	TODO(?): make sure to minimize false sharing on edge_list
 // 	might require to create separate edge lists for each thread, but those would have to lie a cache line apart in memory :/
@@ -268,57 +294,61 @@ static void neighbor_counts_to_offsets(Index node_count, Index* neighbor_counts)
 
 
 // See comment for count_neighbors for an explanation of the seemingly complicated nature of the iteration
-static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArrayObject* edge_list, Index from, Index to, int* onset_div, int* duration_div){
+static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArrayObject* edge_list, PyArrayObject* edge_types, Index from, Index to, int* onset_div, int* duration_div){
 	for(Index i=from; i<to; i++){
 		Index neighbor_count = neighbor_offsets[i+1] - neighbor_offsets[i];
 
 		Node* src = (Node*)PyArray_GETPTR2(edge_list, 0, neighbor_offsets[i]);
 		Node* dst = (Node*)PyArray_GETPTR2(edge_list, 1, neighbor_offsets[i]);
+		EdgeType* types = (EdgeType*)PyArray_DATA(edge_types) + neighbor_offsets[i];
+
+		Int eq_boundary = ((Int)i)-1;
+
+		while(eq_boundary>=0 && onset_div[(Index)eq_boundary] == onset_div[i])
+			eq_boundary--;
 
 		Index cursor=0;
 
-		for(Int j=((Int)i)-1; j>=0; j--){
-			src[cursor] = Index_To_Node(i);
-			dst[cursor] = Index_To_Node((Index)j);
+		Index j=(Index)(eq_boundary+1);
 
+		for(;j<node_count; j++){
 			bool
-				cond1 = (onset_div[(Index)j] == onset_div[i]);
+				cond1 = (onset_div[j] == onset_div[i]),
+				cond3 = (onset_div[j] == onset_div[i] + duration_div[i]);
+
+			src[cursor] = Index_To_Node(i);
+			dst[cursor] = Index_To_Node(j);
+			types[cursor] = Onset_Eq;
 
 			cursor+= (Index)cond1;
+
+			if(cursor == neighbor_count)
+				break;
+
+			src[cursor] = Index_To_Node(i);
+			dst[cursor] = Index_To_Node(j);
+			types[cursor] = Onset_End_Eq;
+
+			cursor+= (Index)cond3;
 
 			if((!cond1) | (cursor == neighbor_count))
 				break;
 		}
 
-
-		//	ASSUMPTION: the adjecancy checks above and below also apply to i itself
-		src[cursor] = Index_To_Node(i);
-		dst[cursor] = Index_To_Node(i);
-
-		cursor++;
-
-		src[cursor] = Index_To_Node(i);
-		dst[cursor] = Index_To_Node(i);
-
-		cursor+= (Index)(duration_div[i] == 0);
+		Index j_star = j;
 
 		if(cursor == neighbor_count)
 			continue;
 
-		Index j=i+1;
-
 		for(;j<node_count; j++){
 			bool
-				cond1 = (onset_div[j] == onset_div[i]),
 				cond2 = (onset_div[j] < onset_div[i] + duration_div[i]);
 
 			src[cursor] = Index_To_Node(i);
 			dst[cursor] = Index_To_Node(j);
+			types[cursor] = Inbetween;
 
-			cursor+= (Index)cond1;
-
-			src[cursor] = Index_To_Node(i);
-			dst[cursor] = Index_To_Node(j);
+			
 
 			cursor+= (Index)cond2;
 
@@ -335,9 +365,12 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 			for(;j < node_count; j++){
 				src[cursor] = Index_To_Node(i);
 				dst[cursor] = Index_To_Node(j);
+				types[cursor] = Closest_End;
 
 				bool
 					cond4 = (onset_div[j] == closest_from_above);
+
+				
 
 				cursor+= (Index)cond4;
 
@@ -345,19 +378,38 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 					break;
 			}
 		}
-		else
-			for(;j < node_count; j++){
-				src[cursor] = Index_To_Node(i);
-				dst[cursor] = Index_To_Node(j);
+		else{
+			if(j == j_star)
+				j++;
 
+			for(;j < node_count; j++){
 				bool
+					cond1 = (onset_div[j] == onset_div[i]),
 					cond3 = (onset_div[j] == onset_div[i] + duration_div[i]);
 
+				
+
+				
+
+				src[cursor] = Index_To_Node(i);
+				dst[cursor] = Index_To_Node(j);
+				types[cursor] = Onset_End_Eq;
+
 				cursor+= (Index)cond3;
+
+				if(cursor == neighbor_count)
+					break;
+
+				src[cursor] = Index_To_Node(i);
+				dst[cursor] = Index_To_Node(j);
+				types[cursor] = Onset_Eq;
+
+				cursor+= (Index)cond1;
 
 				if((!cond3) | (cursor == neighbor_count))
 					break;
 			}
+		}
 
 		assert(cursor == neighbor_count);
 	}
@@ -373,11 +425,15 @@ static PyObject* GMSamplers_compute_edge_list(PyObject* csamplers, PyObject* arg
 		return NULL;
 	}
 
-	Index node_count = (Index)PyArray_SIZE(onset_div);
+	Index node_count = (Index)PyArray_DIM(onset_div,0);
 
-	assert(node_count == (Index)PyArray_SIZE(duration_div));
+	assert(node_count == (Index)PyArray_DIM(duration_div, 0));
+
+
 
 	Index* neighbor_counts = (Index*)malloc(sizeof(Index)*(node_count+1));
+
+	assert(neighbor_counts);
 
 	// TODO: MT
 	count_neighbors(node_count, neighbor_counts, 0, node_count, (int*)PyArray_DATA(onset_div), (int*)PyArray_DATA(duration_div));
@@ -390,12 +446,16 @@ static PyObject* GMSamplers_compute_edge_list(PyObject* csamplers, PyObject* arg
 	
 	PyArrayObject* edge_list = (PyArrayObject*)PyArray_SimpleNew(2, dims, Node_Eqv_In_Numpy);
 
+	const npy_intp dim = neighbor_counts[node_count];
+
+	PyArrayObject* edge_types = (PyArrayObject*)PyArray_SimpleNew(1, &dim, EType_Eqv_In_Numpy);
+
 	// TODO: MT
-	fill_in_neighbors(node_count, neighbor_counts, edge_list, 0, node_count, (int*)PyArray_DATA(onset_div), (int*)PyArray_DATA(duration_div));
+	fill_in_neighbors(node_count, neighbor_counts, edge_list, edge_types,0, node_count, (int*)PyArray_DATA(onset_div), (int*)PyArray_DATA(duration_div));
 
 	free(neighbor_counts);
 
-	return (PyObject*)edge_list;
+	return PyTuple_Pack(2, edge_list, edge_types);
 }
 
 
