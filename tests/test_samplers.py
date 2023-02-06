@@ -16,13 +16,20 @@ class TestSamplers(unittest.TestCase):
             dst[2] = 5
 
 
-            edges = numpy.array([src, dst])
+            edges = sorted(list(zip(src,dst)), key=lambda t:t[1])
+            edges = numpy.array(edges, dtype=numpy.uint32).T
+
+
+
+
 
 
 
             g = sam.Graph(edges,10)
 
-            g.print()
+            print(edges)
+            # g.print()
+            
 
             samples_per_layer, edge_indices_between_layers, load_per_layer = sam.sample_neighbors(g, 3, 3)
 

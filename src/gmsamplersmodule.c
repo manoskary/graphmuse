@@ -17,44 +17,71 @@ typedef uint32_t uint32;
 typedef uint64_t uint64;
 
 // these here are just used as indirection so that code can be compiled differently more easily
-typedef uint32_t Node;
-typedef uint32_t Index;
 typedef int32_t Int;
+typedef uint32_t Node;
+typedef Node Index;
+typedef Node Key;
+typedef uint32_t Value;
+
 #define Node_Eqv_In_Numpy NPY_UINT32
-#define Index_Eqv_In_Numpy NPY_UINT32
+#define Index_Eqv_In_Numpy Node_Eqv_In_Numpy
+#define Key_Eqv_In_Numpy Node_Eqv_In_Numpy
+#define EType_Eqv_In_Numpy NPY_UINT8
+
+typedef uint8_t EdgeType;
+#define Onset_Eq (uint8_t)0
+#define Onset_End_Eq (uint8_t)1
+#define Inbetween (uint8_t)2
+#define Closest_End (uint8_t)3
 
 #define Node_To_Index(n) (n)
 #define Index_To_Node(i) (i)
 
 
-
-static uint GMSamplers_memory_canvas_size = 256;
-static void* GMSamplers_memory_canvas;
-
-
-
-// this should be fine actually since it is used on random nodes
-static uint Node_hash(Node n){
-	return (uint)n;
+static PyArrayObject* new_node_numpy(Index size){
+	const npy_intp dims = (npy_intp)size;
+	return (PyArrayObject*)PyArray_SimpleNew(1, &dims, Node_Eqv_In_Numpy);
 }
 
+
+
+#include <hashmap.c>
+
+// this should be fine actually since it is used on random nodes
+static Key Node_hash(Node n){
+	return (Key)n;
+}
+
+static bool HashSet_add_node(HashSet* hs, Node n){
+	return HashSet_add(hs, Node_hash(n));
+}
+
+static PyArrayObject* HashSet_to_numpy(HashSet* hash_set){
+	PyArrayObject* np_arr = new_node_numpy((Index)hash_set->size);
+
+	Node* copy_dst = PyArray_DATA(np_arr);
+
+	HashSet_copy(hash_set, copy_dst);	
+
+	return np_arr;
+}
 
 /*
 static void count_neighbors(Index from, Index to, Index node_count, Index* neighbor_counts, float* onset_beat, float* duration_beat, float* pitch){
 	for(Index i=from; i<to; i++)
 		for(Index j=0; j<node_count; j++)
-			// need to account that neighbor_counts eventually gets accumulated to inverse_neighbor_offsets which is 0 at index 0
+			// need to account that neighbor_counts eventually gets accumulated to pre_neighbor_offsets which is 0 at index 0
 			// hence i+1
 			neighbor_counts[i+1]+=(Index)adjacency_map(i,j, onset_beat, duration_beat, pitch);
 }
 
-static void fill_in_neighbors(Index from, Index to, Index node_count, Index* inverse_neighbor_offsets, PyArrayObject* edge_list, float* onset_beat, float* duration_beat, float* pitch){
+static void fill_in_neighbors(Index from, Index to, Index node_count, Index* pre_neighbor_offsets, PyArrayObject* edge_list, float* onset_beat, float* duration_beat, float* pitch){
 	// to is excluded from range
 	for(Index i=from; i<to; i++){
-		Node* src = (Node*)PyArray_GETPTR2(edge_list, 0, inverse_neighbor_offsets[i]);
-		Node* dst = (Node*)PyArray_GETPTR2(edge_list, 1, inverse_neighbor_offsets[i]);
+		Node* src = (Node*)PyArray_GETPTR2(edge_list, 0, pre_neighbor_offsets[i]);
+		Node* dst = (Node*)PyArray_GETPTR2(edge_list, 1, pre_neighbor_offsets[i]);
 
-		Index neighbor_count = inverse_neighbor_offsets[i+1] - inverse_neighbor_offsets[i];
+		Index neighbor_count = pre_neighbor_offsets[i+1] - pre_neighbor_offsets[i];
 
 		Index cursor=0;
 		for(Index j=0; j<node_count; j++){
@@ -104,19 +131,19 @@ static void** alloc_cacheline_apart(ssize_t required_count, ssize_t elem_size, u
 
 
 /*
-static void count_inverse_neighbors(Graph* graph, Index from, Index to, int* onset_div, int* duration_div, int max_duration_div){
+static void count_pre_neighbors(Graph* graph, Index from, Index to, int* onset_div, int* duration_div, int max_duration_div){
 	for(Index j=from; j<to; j++){
-		Index inverse_neighbor_count = 0;
+		Index pre_neighbor_count = 0;
 
 		for(Index i=0; i<graph->node_count; i++){
 			// can be localized
-			inverse_neighbor_count += (Index)(onset_div[i]==onset_div[j]);
+			pre_neighbor_count += (Index)(onset_div[i]==onset_div[j]);
 
 			
-			inverse_neighbor_count += (Index)(onset_div[i] + duration_div[i] ==onset_div[j]);
+			pre_neighbor_count += (Index)(onset_div[i] + duration_div[i] ==onset_div[j]);
 
 			// can be localized
-			inverse_neighbor_count += (Index)((onset_div[i] < onset_div[j]) & (onset_div[j] < onset_div[i] + duration_div[i]));
+			pre_neighbor_count += (Index)((onset_div[i] < onset_div[j]) & (onset_div[j] < onset_div[i] + duration_div[i]));
 			
 			if(onset_div[j] > onset_div[i] + duration_div[i]){
 				for(Index k=0; k<graph->node_count; k++){
@@ -124,7 +151,7 @@ static void count_inverse_neighbors(Graph* graph, Index from, Index to, int* ons
 						goto OUTER_LOOP;
 				}
 
-				inverse_neighbor_count++;
+				pre_neighbor_count++;
 			}
 
 		OUTER_LOOP:;
@@ -134,14 +161,14 @@ static void count_inverse_neighbors(Graph* graph, Index from, Index to, int* ons
 		//	ASSUMPTION: the adjecancy checks below also apply to j itself
 		// 	which means calloc is totally unnecessary
 		// also, init value 1
-		Index inverse_neighbor_count = 1;
+		Index pre_neighbor_count = 1;
 
 		//1.: count all onset_divs that are equal to onset_div[j] to the right of j
 		for(Index i = j+1; i<graph->node_count; i++){
 			if(onset_div[i] != onset_div[j])
 				break;
 			
-			inverse_neighbor_count++;
+			pre_neighbor_count++;
 		}
 
 		//2.: count all onset_divs that are equal to onset_div[j] to the left of j
@@ -151,21 +178,21 @@ static void count_inverse_neighbors(Graph* graph, Index from, Index to, int* ons
 			if(onset_div[(Index)i] != onset_div[j])
 				break;
 			
-			inverse_neighbor_count++;
+			pre_neighbor_count++;
 		}
 
 
 
-		inverse_neighbor_count += (Index)(duration_div[(Index)i] > 0);
+		pre_neighbor_count += (Index)(duration_div[(Index)i] > 0);
 
 		for(; i>=0; i--){
 			if(onset_div[i] + max_duration_div < onset_div[j])
 				break;
 
-			inverse_neighbor_count += (Index)(onset_div[(Index)i] + duration_div[(Index)i] >= onset_div[j]);
+			pre_neighbor_count += (Index)(onset_div[(Index)i] + duration_div[(Index)i] >= onset_div[j]);
 		}
 
-		graph->inverse_neighbor_offsets[i+1] = inverse_neighbor_count;
+		graph->pre_neighbor_offsets[i+1] = pre_neighbor_count;
 	}
 }
 
@@ -192,16 +219,14 @@ static void count_inverse_neighbors(Graph* graph, Index from, Index to, int* ons
 
 static void count_neighbors(Index node_count, Index* neighbor_counts, Index from, Index to, int* onset_div, int* duration_div){
 	for(Index i=from; i<to; i++){
-		//	ASSUMPTION: the adjecancy checks below also apply to i itself
-		// 	which means calloc is totally unnecessary
-		// also, init value 1
-		Index neighbor_count = 1;
+		Index neighbor_count = 0;
 
 		for(Int j=((Int)i)-1; j>=0; j--){
 			bool
-				cond1 = (onset_div[(Index)j] == onset_div[i]);
+				cond1 = (onset_div[(Index)j] == onset_div[i]),
+				cond3 = (onset_div[(Index)j] == onset_div[i] + duration_div[i]);
 
-			neighbor_count+= (Index)cond1;
+			neighbor_count += (Index)cond3 + (Index)cond1;
 
 			if(! cond1)
 				break;
@@ -209,20 +234,32 @@ static void count_neighbors(Index node_count, Index* neighbor_counts, Index from
 
 
 
-		Index j=i+1;
+		Index j=i;
 
 		for(;j<node_count; j++){
 			bool
 				cond1 = (onset_div[j] == onset_div[i]),
+				cond3 = (onset_div[j] == onset_div[i] + duration_div[i]);
+
+			neighbor_count += (Index)cond3 + (Index)cond1;
+
+			if(! cond1)
+				break;
+		}
+
+		Index j_star = j;
+
+		for(;j<node_count; j++){
+			bool
 				cond2 = (onset_div[j] < onset_div[i] + duration_div[i]);
 
-			neighbor_count+= (Index)cond1 + (Index)cond2;
+			neighbor_count+= (Index)cond2;
 
 			if(! cond2)
 				break;
 		}
 
-		if((j < node_count) & (onset_div[j] > onset_div[i] + duration_div[i])){
+		if((j < node_count) && (onset_div[j] > onset_div[i] + duration_div[i])){
 			int closest_from_above = onset_div[j];
 
 			for(;j<node_count; j++){
@@ -235,17 +272,20 @@ static void count_neighbors(Index node_count, Index* neighbor_counts, Index from
 					break;
 			}
 		}
-		else
+		else{
+			if(j == j_star)
+				j++;
 			for(;j<node_count; j++){
 				bool
+					cond1 = (onset_div[j] == onset_div[i]),
 					cond3 = (onset_div[j] == onset_div[i] + duration_div[i]);
 
-				neighbor_count += (Index)cond3;
+				neighbor_count += (Index)cond3 + (Index)cond1;
 
 				if(! cond3)
 					break;
 			}
-
+		}
 		neighbor_counts[i+1] = neighbor_count;
 	}
 }
@@ -255,6 +295,12 @@ static void neighbor_counts_to_offsets(Index node_count, Index* neighbor_counts)
 	for(Index n=1; n+1<node_count+1; n++)
 		neighbor_counts[n+1]+=neighbor_counts[n];
 }
+
+
+
+
+
+
 
 //	TODO(?): make sure to minimize false sharing on edge_list
 // 	might require to create separate edge lists for each thread, but those would have to lie a cache line apart in memory :/
@@ -268,57 +314,61 @@ static void neighbor_counts_to_offsets(Index node_count, Index* neighbor_counts)
 
 
 // See comment for count_neighbors for an explanation of the seemingly complicated nature of the iteration
-static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArrayObject* edge_list, Index from, Index to, int* onset_div, int* duration_div){
+static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArrayObject* edge_list, PyArrayObject* edge_types, Index from, Index to, int* onset_div, int* duration_div){
 	for(Index i=from; i<to; i++){
 		Index neighbor_count = neighbor_offsets[i+1] - neighbor_offsets[i];
 
 		Node* src = (Node*)PyArray_GETPTR2(edge_list, 0, neighbor_offsets[i]);
 		Node* dst = (Node*)PyArray_GETPTR2(edge_list, 1, neighbor_offsets[i]);
+		EdgeType* types = (EdgeType*)PyArray_DATA(edge_types) + neighbor_offsets[i];
+
+		Int eq_boundary = ((Int)i)-1;
+
+		while(eq_boundary>=0 && onset_div[(Index)eq_boundary] == onset_div[i])
+			eq_boundary--;
 
 		Index cursor=0;
 
-		for(Int j=((Int)i)-1; j>=0; j--){
-			src[cursor] = Index_To_Node(i);
-			dst[cursor] = Index_To_Node((Index)j);
+		Index j=(Index)(eq_boundary+1);
 
+		for(;j<node_count; j++){
 			bool
-				cond1 = (onset_div[(Index)j] == onset_div[i]);
+				cond1 = (onset_div[j] == onset_div[i]),
+				cond3 = (onset_div[j] == onset_div[i] + duration_div[i]);
+
+			src[cursor] = Index_To_Node(i);
+			dst[cursor] = Index_To_Node(j);
+			types[cursor] = Onset_Eq;
 
 			cursor+= (Index)cond1;
+
+			if(cursor == neighbor_count)
+				break;
+
+			src[cursor] = Index_To_Node(i);
+			dst[cursor] = Index_To_Node(j);
+			types[cursor] = Onset_End_Eq;
+
+			cursor+= (Index)cond3;
 
 			if((!cond1) | (cursor == neighbor_count))
 				break;
 		}
 
-
-		//	ASSUMPTION: the adjecancy checks above and below also apply to i itself
-		src[cursor] = Index_To_Node(i);
-		dst[cursor] = Index_To_Node(i);
-
-		cursor++;
-
-		src[cursor] = Index_To_Node(i);
-		dst[cursor] = Index_To_Node(i);
-
-		cursor+= (Index)(duration_div[i] == 0);
+		Index j_star = j;
 
 		if(cursor == neighbor_count)
 			continue;
 
-		Index j=i+1;
-
 		for(;j<node_count; j++){
 			bool
-				cond1 = (onset_div[j] == onset_div[i]),
 				cond2 = (onset_div[j] < onset_div[i] + duration_div[i]);
 
 			src[cursor] = Index_To_Node(i);
 			dst[cursor] = Index_To_Node(j);
+			types[cursor] = Inbetween;
 
-			cursor+= (Index)cond1;
-
-			src[cursor] = Index_To_Node(i);
-			dst[cursor] = Index_To_Node(j);
+			
 
 			cursor+= (Index)cond2;
 
@@ -335,9 +385,12 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 			for(;j < node_count; j++){
 				src[cursor] = Index_To_Node(i);
 				dst[cursor] = Index_To_Node(j);
+				types[cursor] = Closest_End;
 
 				bool
 					cond4 = (onset_div[j] == closest_from_above);
+
+				
 
 				cursor+= (Index)cond4;
 
@@ -345,19 +398,38 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 					break;
 			}
 		}
-		else
-			for(;j < node_count; j++){
-				src[cursor] = Index_To_Node(i);
-				dst[cursor] = Index_To_Node(j);
+		else{
+			if(j == j_star)
+				j++;
 
+			for(;j < node_count; j++){
 				bool
+					cond1 = (onset_div[j] == onset_div[i]),
 					cond3 = (onset_div[j] == onset_div[i] + duration_div[i]);
 
+				
+
+				
+
+				src[cursor] = Index_To_Node(i);
+				dst[cursor] = Index_To_Node(j);
+				types[cursor] = Onset_End_Eq;
+
 				cursor+= (Index)cond3;
+
+				if(cursor == neighbor_count)
+					break;
+
+				src[cursor] = Index_To_Node(i);
+				dst[cursor] = Index_To_Node(j);
+				types[cursor] = Onset_Eq;
+
+				cursor+= (Index)cond1;
 
 				if((!cond3) | (cursor == neighbor_count))
 					break;
 			}
+		}
 
 		assert(cursor == neighbor_count);
 	}
@@ -373,11 +445,15 @@ static PyObject* GMSamplers_compute_edge_list(PyObject* csamplers, PyObject* arg
 		return NULL;
 	}
 
-	Index node_count = (Index)PyArray_SIZE(onset_div);
+	Index node_count = (Index)PyArray_DIM(onset_div,0);
 
-	assert(node_count == (Index)PyArray_SIZE(duration_div));
+	assert(node_count == (Index)PyArray_DIM(duration_div, 0));
+
+
 
 	Index* neighbor_counts = (Index*)malloc(sizeof(Index)*(node_count+1));
+
+	assert(neighbor_counts);
 
 	// TODO: MT
 	count_neighbors(node_count, neighbor_counts, 0, node_count, (int*)PyArray_DATA(onset_div), (int*)PyArray_DATA(duration_div));
@@ -390,25 +466,29 @@ static PyObject* GMSamplers_compute_edge_list(PyObject* csamplers, PyObject* arg
 	
 	PyArrayObject* edge_list = (PyArrayObject*)PyArray_SimpleNew(2, dims, Node_Eqv_In_Numpy);
 
+	const npy_intp dim = neighbor_counts[node_count];
+
+	PyArrayObject* edge_types = (PyArrayObject*)PyArray_SimpleNew(1, &dim, EType_Eqv_In_Numpy);
+
 	// TODO: MT
-	fill_in_neighbors(node_count, neighbor_counts, edge_list, 0, node_count, (int*)PyArray_DATA(onset_div), (int*)PyArray_DATA(duration_div));
+	fill_in_neighbors(node_count, neighbor_counts, edge_list, edge_types,0, node_count, (int*)PyArray_DATA(onset_div), (int*)PyArray_DATA(duration_div));
 
 	free(neighbor_counts);
 
-	return (PyObject*)edge_list;
+	return PyTuple_Pack(2, edge_list, edge_types);
 }
 
 
 typedef struct{
 	PyObject_HEAD
 	Index node_count;
-	Index* inverse_neighbor_offsets;
+	Index* pre_neighbor_offsets;
 	PyArrayObject* edge_list;
 } Graph;
 
 
 static void Graph_dealloc(Graph* graph){
-	free(graph->inverse_neighbor_offsets);
+	free(graph->pre_neighbor_offsets);
 	Py_DECREF(graph->edge_list);
 	Py_TYPE(graph)->tp_free((PyObject*)graph);
 }
@@ -432,11 +512,11 @@ static PyObject* Graph_new(PyTypeObject* type, PyObject* args, PyObject* kwds){
 	
 	if(graph!=NULL){
 		// NOTE: if ASSUMPTION in count_neighbors is wrong, memory needs to be zeroed out before starting counting
-		graph->inverse_neighbor_offsets = (Index*)malloc((node_count+1)*sizeof(Index));
+		graph->pre_neighbor_offsets = (Index*)malloc((node_count+1)*sizeof(Index));
 
 
 
-		assert(graph->inverse_neighbor_offsets);
+		assert(graph->pre_neighbor_offsets);
 	}
 
 	return (PyObject*)graph;
@@ -466,32 +546,31 @@ static int Graph_init(Graph* graph, PyObject* args, PyObject* kwds){
 
 	graph->edge_list = edges;
 
-	Index edge_count = (Index)PyArray_DIM(edges, 1);
-	Node* dst = (Node*)PyArray_GETPTR2(edges, 1, 0);
+
+	
+
 	
 	// TODO: MT or GPU
-	for(Index e=0; e<edge_count; e++){
-    	graph->inverse_neighbor_offsets[Node_To_Index(dst[e])+1]++;
+	for(Index i=0; i<graph->node_count+1; i++){
+    	graph->pre_neighbor_offsets[i]=0;
     }
 
-    neighbor_counts_to_offsets(graph->node_count, graph->inverse_neighbor_offsets);
+    Index edge_count = (Index)PyArray_DIM(edges, 1);
+
+	for(Index e=0; e<edge_count; e++){
+		Node dst_node = *((Node*)PyArray_GETPTR2(edges, 1, e));
+		graph->pre_neighbor_offsets[Node_To_Index(dst_node)+1]++;
+    }
+
+    neighbor_counts_to_offsets(graph->node_count, graph->pre_neighbor_offsets);
 
 
 	return 0;
 }
 
 static PyObject* Graph_print(Graph* graph, PyObject *Py_UNUSED(ignored)){
-	for(Index i=0;i<graph->node_count;i++){
-		printf("%u:\t", i);
-		Index offset = graph->inverse_neighbor_offsets[i];
-		Index neighbor_count = graph->inverse_neighbor_offsets[i+1] - graph->inverse_neighbor_offsets[i];
-
-		Node* neighbors = (Node*)PyArray_GETPTR2(graph->edge_list, 1, offset);
-
-		for(Index n=0; n<neighbor_count; n++)
-			printf("%u ", neighbors[n]);
-
-		printf("\n");
+	for(Index i=0;i<graph->node_count+1;i++){
+		printf("%u\t", graph->pre_neighbor_offsets[i]);
 	}
 	printf("\n");
 
@@ -499,7 +578,7 @@ static PyObject* Graph_print(Graph* graph, PyObject *Py_UNUSED(ignored)){
 }
 
 static PyMethodDef Graph_methods[] = {
-	//{"print", (PyCFunction)Graph_print, METH_NOARGS, "print the graph"},
+	{"print", (PyCFunction)Graph_print, METH_NOARGS, "print the graph"},
 	{NULL}
 };
 
@@ -549,238 +628,10 @@ static bool NodeTracker_add_succesfully(NodeTracker* nt, Node n){
 	return true;
 }
 
-#define NodeHashSet_bucket_count 23 //should be prime
 
-typedef struct{
-	Index capacity;
-	Index size;
-	NodeTracker buckets[NodeHashSet_bucket_count];
-}NodeHashSet;
 
-// ASSUMPTION: capacity is already set
-static void NodeHashSet_init(NodeHashSet* node_hash_set){
-	assert(node_hash_set->capacity > 0);
-	assert(node_hash_set->capacity % NodeHashSet_bucket_count == 0);
-	assert(node_hash_set->buckets[0].nodes);
 
-	uint nodes_per_bucket = node_hash_set->capacity/NodeHashSet_bucket_count;
-	
-	node_hash_set->buckets[0].capacity = nodes_per_bucket;
-	node_hash_set->buckets[0].tracked = 0;
 
-	node_hash_set->size=0;
-
-	for(uint b=1; b<NodeHashSet_bucket_count; b++){
-		node_hash_set->buckets[b].capacity = nodes_per_bucket;
-		node_hash_set->buckets[b].tracked = 0;
-		node_hash_set->buckets[b].nodes = node_hash_set->buckets[b-1].nodes + nodes_per_bucket;
-	}
-}
-
-static void NodeHashSet_new(NodeHashSet* node_hash_set, Index min_capacity){
-	Index init_nodes_per_bucket = (min_capacity/NodeHashSet_bucket_count + 1);
-	Index capacity = NodeHashSet_bucket_count*init_nodes_per_bucket;
-	node_hash_set->buckets[0].nodes = (Node*)malloc(sizeof(Node)*capacity);
-
-	assert(node_hash_set->buckets[0].nodes);
-
-	node_hash_set->capacity = capacity;
-}
-
-static void NodeHashSet_new_init(NodeHashSet* node_hash_set, Index min_capacity){
-	NodeHashSet_new(node_hash_set, min_capacity);
-
-	NodeHashSet_init(node_hash_set);
-}
-
-static uint NodeHashSet_capacity(NodeHashSet* node_hash_set){
-	uint capacity=0;
-
-	for(uint b=0; b<NodeHashSet_bucket_count; b++)
-		capacity+=node_hash_set->buckets[b].capacity;
-
-	node_hash_set->capacity = capacity;
-
-	return capacity;
-}
-
-static uint NodeHashSet_size(NodeHashSet* node_hash_set){
-	uint size=0;
-
-	for(uint b=0; b<NodeHashSet_bucket_count; b++)
-		size+=node_hash_set->buckets[b].tracked;
-
-	node_hash_set->size = size;
-
-	return size;
-}
-
-static bool NodeHashSet_is_full(NodeHashSet* nhs){
-	for(uint b=0; b<NodeHashSet_bucket_count; b++)
-		if(nhs->buckets[b].tracked < nhs->buckets[b].capacity)
-			return false;
-
-	return true;
-}
-
-
-static bool NodeHashSet_add_succesfully(NodeHashSet* nhs, Node n){
-	int bucket_index = (int)Node_hash(n)%NodeHashSet_bucket_count;
-	
-	NodeTracker* bucket_tracker = nhs->buckets+bucket_index;
-
-	// Node* memory_offset = nhs->buckets[0].nodes;
-
-	// bucket_tracker->nodes += memory_offset;
-
-	Index index = NodeTracker_index(bucket_tracker, n);
-
-	// bucket_tracker->nodes -= memory_offset;
-
-	if(index < bucket_tracker->capacity){
-		return false;
-	}
-
-	if(nhs->size == nhs->capacity){
-		const uint grow_factor = 2;
-
-		Node* new_nodes = (Node*)malloc(sizeof(Node)*grow_factor*nhs->capacity);
-
-		if(new_nodes == NULL){
-			// TODO: should be handled with an error msg
-			puts("oops no new memory");
-			return false;
-		}
-
-		printf("resizing from %u to %u\n", nhs->capacity, nhs->capacity*grow_factor);
-
-		Index cursor=0;
-
-		Node* mem_to_free = nhs->buckets[0].nodes;
-
-		for(uint b=0; b<NodeHashSet_bucket_count; b++){
-			NodeTracker* bucket_tracker = nhs->buckets + b;
-
-			bucket_tracker->capacity *= grow_factor;
-
-			Node* backup = bucket_tracker->nodes;
-
-			bucket_tracker->nodes = new_nodes + cursor;			
-
-			for(Index t=0; t<bucket_tracker->tracked; t++)
-				bucket_tracker->nodes[t] = backup[t];
-
-			cursor+=bucket_tracker->capacity;
-		}
-
-		free(mem_to_free);
-
-
-		nhs->capacity *= grow_factor;
-	}
-
-	if(bucket_tracker->tracked == bucket_tracker->capacity){
-		int eviction_index = bucket_index;
-
-		for(int b=bucket_index+1; b<NodeHashSet_bucket_count;b++){
-			NodeTracker* bt = nhs->buckets+b;
-
-			if(bt->tracked<bt->capacity){
-				eviction_index = b;
-				break;
-			}
-		}
-
-		if(eviction_index == bucket_index){
-			for(int b=bucket_index-1; b>=0;b--){
-				NodeTracker* bt = nhs->buckets+b;
-
-				if(bt->tracked<bt->capacity){
-					eviction_index = b;
-					break;
-				}
-			}
-		}
-
-		assert(eviction_index != bucket_index);
-
-		(nhs->buckets+eviction_index)->capacity--;
-
-		int dir = (eviction_index < bucket_index)? 1 : -1;
-
-		while(eviction_index != bucket_index){
-			NodeTracker* full_bt = nhs->buckets + eviction_index + dir;
-			NodeTracker* bt = nhs->buckets + eviction_index;
-
-			NodeTracker* indirect_bt;
-			Int write_index, read_index;
-
-			/*
-				The idea here is:
-					1. take the bucket with the higher address
-					2. read in the direction from the end of the bucket
-						so 	if dir = 1 = ->, read at last index
-							if dir = -1 = <-, read at first index
-					3. write in the opposite direction, this time specifically at the end of non-empty bucket
-						from the perspective of higher address bucket, hence the -1 in first branch
-			
-			if(dir==1){
-				indirect_bt = full_bt;
-				read_index = full_bt->tracked-1;
-				write_index = -1;
-				
-			}
-			else{
-				indirect_bt = bt;
-				read_index = 0;
-				write_index = bt->tracked;
-				
-			}
-			*/
-
-
-			indirect_bt = MACRO_MAX(full_bt, bt); //TODO: should be completely branchless otherwise the branch in the comment above can be used for "more" readability
-			read_index = ((Index)(dir==1))*indirect_bt->tracked - (Index)(dir==1);
-			write_index = ((Index)(dir!=1))*indirect_bt->tracked - (Index)(dir==1);
-
-			// indirect_bt->nodes+=memory_offset;
-
-			indirect_bt->nodes[write_index] = indirect_bt->nodes[read_index];
-
-			indirect_bt->nodes-=dir;
-
-			// indirect_bt->nodes-=memory_offset;
-
-			/* 	NOTE: 	this isn't necessary since intermediate buckets keep their capacity
-						only the first and last bucket tradeoff capacity
-						however, this is left in a comment for completion
-			
-			full_bt->capacity++;
-			bt->capacity--;
-			*/
-
-			eviction_index+=dir;
-		}
-
-		bucket_tracker->capacity++;
-	}
-
-	// bucket_tracker->nodes += memory_offset;
-
-	bucket_tracker->nodes[bucket_tracker->tracked++] = n;
-
-	// bucket_tracker->nodes -= memory_offset;
-
-	nhs->size++;
-
-	return true;
-}
-
-
-static PyArrayObject* new_node_numpy(uint size){
-	const npy_intp dims = size;
-	return (PyArrayObject*)PyArray_SimpleNew(1, &dims, Node_Eqv_In_Numpy);
-}
 
 static PyArrayObject* index_array_to_numpy(Index* indices, uint size){
 	const npy_intp dims = size;
@@ -800,19 +651,7 @@ static PyArrayObject* index_array_to_numpy(Index* indices, uint size){
 
 
 
-static PyArrayObject* NodeHashSet_to_numpy(NodeHashSet* node_hash_set){
-	PyArrayObject* np_arr = new_node_numpy(NodeHashSet_size(node_hash_set));
 
-	Node* copy_dst = PyArray_DATA(np_arr);
-
-	for(uint b=0; b<NodeHashSet_bucket_count; b++)
-		//TODO: could probably be optimized with memcpy or copying with byte size different from sizeof(Node)
-		for(Index n=0; n<node_hash_set->buckets[b].tracked; n++)
-			*copy_dst++ = node_hash_set->buckets[b].nodes[n];
-		
-
-	return np_arr;
-}
 
 
 static uint64 power(uint32 base, uint32 exponent){
@@ -866,11 +705,12 @@ static bool is_subset_of(Node* lhs, Index lhs_size, Node* rhs, Index rhs_size){
 
 
 static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args){
-	uint depth, samples_per_node;
+	uint depth;
+	Index samples_per_node;
 	PyArrayObject* target_nodes = NULL;
 	Graph* graph;
 
-	if(!PyArg_ParseTuple(args, "OII|O", (PyObject**)&graph, &depth, &samples_per_node, (PyObject**)&target_nodes)){
+	if(!PyArg_ParseTuple(args, "OII|O", (PyObject**)&graph, &depth, (uint*)&samples_per_node, (PyObject**)&target_nodes)){
 		printf("If you don't provide proper arguments, you can't have any neighbor sampling.\nHow can you have any neighbor sampling if you don't provide proper arguments?\n");
 		return NULL;
 	}
@@ -879,8 +719,6 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 		disallow samples_per_node > graph->node_count, it just doesn't make sense
 		
 		emit warning if (maximum) total number of samples > graph->node_count
-
-		check if numpy.dtype is numpy.uint32 or numpy.uint64
 
 		maybe (but really only maybe) check if target nodes actually occur in graph
 	*/
@@ -900,15 +738,9 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 		return NULL;
 	}
 
-	uint prev_size;
+	Index prev_size;
 
-	NodeTracker node_tracker = {};
-	node_tracker.capacity = samples_per_node;
-
-	NodeHashSet node_hash_set;
-	NodeHashSet load_set;
-
-
+	HashSet load_set;
 
 	PyArrayObject* prev_layer;
 
@@ -923,7 +755,8 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 			return NULL;
 		}
 
-		NodeHashSet_new_init(&load_set, samples_per_node*(samples_per_node+1));
+		HashSet_new(&load_set, samples_per_node);
+		HashSet_init(&load_set);
 
 		Node* init_nodes = (Node*)PyArray_DATA(init_layer);
 
@@ -932,7 +765,7 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 
 			for(;;){
 				node_sample = rand()%graph->node_count; // TODO: need to make sure these are valid samples
-				if(NodeHashSet_add_succesfully(&load_set, node_sample))
+				if(HashSet_add_node(&load_set, node_sample))
 					break;
 			}
 			
@@ -954,19 +787,23 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 		PyList_SET_ITEM(samples_per_layer, depth, (PyObject*)target_nodes);
 
 		
-		NodeHashSet_new_init(&load_set, prev_size*(samples_per_node+1));
+		HashSet_new(&load_set, prev_size);
+		HashSet_init(&load_set);
 
 		Node* raw_target_nodes = PyArray_DATA(target_nodes);
 
 		for(uint n = 0 ; n < prev_size; n++)
-			NodeHashSet_add_succesfully(&load_set, *raw_target_nodes++);
+			HashSet_add_node(&load_set, *raw_target_nodes++);
 
 
 		prev_layer = target_nodes;
 	}
 
-	NodeHashSet_new(&node_hash_set, prev_size*samples_per_node);
+	HashSet node_hash_set;
+	HashSet_new(&node_hash_set, prev_size);
 
+	NodeTracker node_tracker = {};
+	node_tracker.capacity = samples_per_node;
 	node_tracker.nodes = (Node*)malloc(samples_per_node*sizeof(Node));
 	node_tracker.capacity = samples_per_node;
 	assert(node_tracker.nodes);
@@ -978,7 +815,7 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 	for(uint layer=depth;layer>0; layer--){
 		Index cursor=0;
 
-		NodeHashSet_init(&node_hash_set);
+		HashSet_init(&node_hash_set);
 
 		
 
@@ -989,15 +826,17 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 			Node dst_node = prev_layer_nodes[n];
 
 
-			Index offset = graph->inverse_neighbor_offsets[Node_To_Index(dst_node)];
-			Index neighbor_count = graph->inverse_neighbor_offsets[Node_To_Index(dst_node)+1]-graph->inverse_neighbor_offsets[Node_To_Index(dst_node)];
+			Index offset = graph->pre_neighbor_offsets[Node_To_Index(dst_node)];
+			Index pre_neighbor_count = graph->pre_neighbor_offsets[Node_To_Index(dst_node)+1]-graph->pre_neighbor_offsets[Node_To_Index(dst_node)];
 
-			Node* inverse_neighbors = (Node*)PyArray_GETPTR2(graph->edge_list, 0, offset);
+			//Node* pre_neighbors = (Node*)PyArray_GETPTR2(graph->edge_list, 0, offset);
 
-			if(neighbor_count <= samples_per_node){
-				for(Index i=0; i<neighbor_count; i++){
-					NodeHashSet_add_succesfully(&node_hash_set, inverse_neighbors[i]);
-					NodeHashSet_add_succesfully(&load_set, inverse_neighbors[i]);
+			if(pre_neighbor_count <= samples_per_node){
+				for(Index i=0; i<pre_neighbor_count; i++){
+					Node pre_neighbor = *((Node*)PyArray_GETPTR2(graph->edge_list, 0, offset + i));
+
+					HashSet_add_node(&node_hash_set, pre_neighbor);
+					HashSet_add_node(&load_set, pre_neighbor);
 
 					edge_index_canvas[cursor++] = offset + i;
 				}
@@ -1010,20 +849,22 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 				if this threshold is reached, random subset is sampled via random permutation
 				this is viable since memory waste is at most 25% (for temporary storage)
 			*/
-			else if(samples_per_node > (uint)(0.75*neighbor_count)){
-				Index* perm = (Index*)malloc(sizeof(Index)*neighbor_count);
+			else if(samples_per_node > (uint)(0.75*pre_neighbor_count)){
+				Index* perm = (Index*)malloc(sizeof(Index)*pre_neighbor_count);
 
 				assert(perm);
 
-				for(Index i=0; i<neighbor_count; i++)
+				for(Index i=0; i<pre_neighbor_count; i++)
 					perm[i]=i;
 				
 
 				for(Index i=0; i<samples_per_node; i++){
-					Index rand_i = i + rand()%(neighbor_count-i);
+					Index rand_i = i + rand()%(pre_neighbor_count-i);
 
-					NodeHashSet_add_succesfully(&node_hash_set, inverse_neighbors[perm[rand_i]]);
-					NodeHashSet_add_succesfully(&load_set, inverse_neighbors[perm[rand_i]]);
+					Node node_sample = *((Node*)PyArray_GETPTR2(graph->edge_list, 0, offset + perm[rand_i]));
+
+					HashSet_add_node(&node_hash_set, node_sample);
+					HashSet_add_node(&load_set, node_sample);
 
 					edge_index_canvas[cursor++] = offset + perm[rand_i];
 
@@ -1043,16 +884,16 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 					uint attempts=1;
 
 					for(;;){
-						edge_index = rand()%neighbor_count;
-						node_sample = inverse_neighbors[edge_index];
+						edge_index = rand()%pre_neighbor_count;
+						node_sample = *((Node*)PyArray_GETPTR2(graph->edge_list, 0, offset + edge_index));
 						if(NodeTracker_add_succesfully(&node_tracker, node_sample))
 							break;
 
 						attempts++;
 					}
 					
-					NodeHashSet_add_succesfully(&node_hash_set, node_sample);
-					NodeHashSet_add_succesfully(&load_set, node_sample);
+					HashSet_add_node(&node_hash_set, node_sample);
+					HashSet_add_node(&load_set, node_sample);
 					
 
 					edge_index_canvas[cursor++] = offset + edge_index;
@@ -1060,38 +901,18 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 			}
 		}
 
-		/*
-			Monitoring of hash set usage
-		{
-			double in_use_load = (double)load_set.size/(double)load_set.capacity;
-			double in_use_node_hash = (double)node_hash_set.size/(double)node_hash_set.capacity;
-			printf("%f %f\n", in_use_load, in_use_node_hash);
-
-			printf("%u %u\n", load_set.capacity, node_hash_set.capacity);
-
-
-			Index min_cap=-1, max_cap=0;
-
-			for(uint b=0; b<NodeHashSet_bucket_count; b++){
-				min_cap = MACRO_MIN(min_cap, load_set.buckets[b].tracked);
-				max_cap = MACRO_MAX(max_cap, load_set.buckets[b].tracked);
-			}
-
-			printf("%u %u %u\n", min_cap, max_cap, max_cap-min_cap);
-		}
-		*/
+		
 		PyArrayObject* edge_indices = index_array_to_numpy(edge_index_canvas, cursor);
 		
 
-		PyArrayObject* new_layer = NodeHashSet_to_numpy(&node_hash_set);
-		PyArrayObject* layer_load = NodeHashSet_to_numpy(&load_set);
+		PyArrayObject* new_layer = HashSet_to_numpy(&node_hash_set);
+		PyArrayObject* layer_load = HashSet_to_numpy(&load_set);
 
+		HashSet tmp = load_set;
 
-		Node* tmp_nodes = load_set.buckets[0].nodes;
-		Index tmp_capacity = load_set.capacity;
 		load_set = node_hash_set;
-		node_hash_set.buckets[0].nodes = tmp_nodes;
-		node_hash_set.capacity = tmp_capacity;
+		node_hash_set = tmp;
+
 
 		prev_size = PyArray_SIZE(new_layer);
 		prev_layer = new_layer;
@@ -1102,12 +923,237 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 	}
 
 	free(node_tracker.nodes);
-	free(node_hash_set.buckets[0].nodes);
-	free(load_set.buckets[0].nodes);
+	HashSet_free(&load_set);
+	HashSet_free(&node_hash_set);
 	free(edge_index_canvas);
 
 	return PyTuple_Pack(3, samples_per_layer, edge_indices_between_layers, load_per_layer);
 }
+
+
+// static PyObject* GMSamplers_sample_layerwise(PyObject* csamplers, PyObject* args){
+// 	uint depth;
+// 	Index samplesize_per_layer;
+// 	PyArrayObject* target_nodes = NULL;
+// 	Graph* graph;
+
+// 	if(!PyArg_ParseTuple(args, "OII|O", (PyObject**)&graph, &depth, (uint*)&samplesize_per_layer, (PyObject**)&target_nodes)){
+// 		printf("If you don't provide proper arguments, you can't have any layerwise sampling.\nHow can you have any layerwise sampling if you don't provide proper arguments?\n");
+// 		return NULL;
+// 	}
+
+// 	/* 	TODO
+// 		disallow samplesize_per_layer > graph->node_count, it just doesn't make sense
+		
+// 		emit warning if (maximum) total number of samples > graph->node_count
+
+// 		maybe (but really only maybe) check if target nodes actually occur in graph
+// 	*/
+
+// 	PyObject* samples_per_layer = PyList_New(depth+1);
+// 	PyObject* load_per_layer = PyList_New(depth);
+// 	PyObject* edge_indices_between_layers = PyList_New(depth);
+
+
+// 	if((samples_per_layer == NULL) | (load_per_layer == NULL) | (edge_indices_between_layers == NULL)){
+// 		printf("can't create return pylists\n");
+
+// 		Py_XDECREF(samples_per_layer);
+// 		Py_XDECREF(load_per_layer);
+// 		Py_XDECREF(edge_indices_between_layers);
+
+// 		return NULL;
+// 	}
+
+// 	Index prev_size;
+
+// 	HashSet load_set;
+
+// 	PyArrayObject* prev_layer;
+
+// 	if(target_nodes == NULL){
+// 		PyArrayObject* init_layer = new_node_numpy(MACRO_MIN(samplesize_per_layer,graph->node_count));
+
+// 		if(init_layer == NULL){
+// 			puts("couldn't create init layer");
+// 			Py_DECREF(samples_per_layer);
+// 			Py_DECREF(edge_indices_between_layers);
+// 			Py_DECREF(load_per_layer);
+// 			return NULL;
+// 		}
+
+// 		HashSet_new(&load_set, samplesize_per_layer);
+// 		HashSet_init(&load_set);
+
+// 		Node* init_nodes = (Node*)PyArray_DATA(init_layer);
+
+// 		for(uint sample=0; sample<samplesize_per_layer; sample++){
+// 			Node node_sample;
+
+// 			for(;;){
+// 				node_sample = rand()%graph->node_count; // TODO: need to make sure these are valid samples
+// 				if(HashSet_add_node(&load_set, node_sample))
+// 					break;
+// 			}
+			
+// 			*init_nodes++ = node_sample;
+// 		}
+
+// 		PyList_SET_ITEM(samples_per_layer, depth, (PyObject*)init_layer);
+
+// 		prev_size = samplesize_per_layer;
+
+// 		prev_layer = init_layer;
+// 	}
+// 	else{
+// 		//TODO: what to do if target_nodes is not owned by the caller?
+// 		//TODO: what if target nodes doesnt have shape (N,) or (N,1)?
+// 		Py_INCREF(target_nodes);
+// 		prev_size = PyArray_SIZE(target_nodes);
+
+// 		PyList_SET_ITEM(samples_per_layer, depth, (PyObject*)target_nodes);
+
+		
+// 		HashSet_new(&load_set, prev_size);
+// 		HashSet_init(&load_set);
+
+// 		Node* raw_target_nodes = PyArray_DATA(target_nodes);
+
+// 		for(uint n = 0 ; n < prev_size; n++)
+// 			HashSet_add_node(&load_set, *raw_target_nodes++);
+
+
+// 		prev_layer = target_nodes;
+// 	}
+
+// 	HashSet node_hash_set;
+// 	HashSet_new(&node_hash_set, prev_size);
+
+// 	NodeTracker node_tracker = {};
+// 	node_tracker.capacity = samplesize_per_layer;
+// 	node_tracker.nodes = (Node*)malloc(samplesize_per_layer*sizeof(Node));
+// 	assert(node_tracker.nodes);
+
+// 	Index* edge_index_canvas = (Index*)malloc(sizeof(Index)*prev_size*power(samplesize_per_layer, depth));
+
+// 	assert(edge_index_canvas);
+	
+// 	for(uint layer=depth;layer>0; layer--){
+// 		Index cursor=0;
+
+// 		HashSet_init(&node_hash_set);
+
+		
+
+
+// 		Node* prev_layer_nodes = (Node*)PyArray_DATA(prev_layer);
+
+// 		for(Index n=0; n<prev_size; n++){
+// 			Node dst_node = prev_layer_nodes[n];
+
+
+// 			Index offset = graph->pre_neighbor_offsets[Node_To_Index(dst_node)];
+// 			Index pre_neighbor_count = graph->pre_neighbor_offsets[Node_To_Index(dst_node)+1]-graph->pre_neighbor_offsets[Node_To_Index(dst_node)];
+
+// 			Node* pre_neighbors = (Node*)PyArray_GETPTR2(graph->edge_list, 0, offset);
+
+// 			if(pre_neighbor_count <= samplesize_per_layer){
+// 				for(Index i=0; i<pre_neighbor_count; i++){
+// 					HashSet_add_node(&node_hash_set, pre_neighbors[i]);
+// 					HashSet_add_node(&load_set, pre_neighbors[i]);
+
+// 					edge_index_canvas[cursor++] = offset + i;
+// 				}
+// 			}
+// 			/*
+// 				expected number of attempts to insert a unique sample into set with k elements is n/(n-k)
+// 				for k=n*f, this results in 1/(1-f), meaning, if we want to limit the expected number of attempts
+// 				to let's say 4, f has to be at most 3/4=0.75
+
+// 				if this threshold is reached, random subset is sampled via random permutation
+// 				this is viable since memory waste is at most 25% (for temporary storage)
+// 			*/
+// 			else if(samples_per_node > (uint)(0.75*pre_neighbor_count)){
+// 				Index* perm = (Index*)malloc(sizeof(Index)*pre_neighbor_count);
+
+// 				assert(perm);
+
+// 				for(Index i=0; i<pre_neighbor_count; i++)
+// 					perm[i]=i;
+				
+
+// 				for(Index i=0; i<samples_per_node; i++){
+// 					Index rand_i = i + rand()%(pre_neighbor_count-i);
+
+// 					HashSet_add_node(&node_hash_set, pre_neighbors[perm[rand_i]]);
+// 					HashSet_add_node(&load_set, pre_neighbors[perm[rand_i]]);
+
+// 					edge_index_canvas[cursor++] = offset + perm[rand_i];
+
+// 					perm[rand_i]=i;
+// 				}
+
+// 				free(perm);
+// 			}
+// 			else{
+// 				node_tracker.tracked = 0;
+				
+// 				for(uint sample=0; sample<samples_per_node; sample++){
+// 					Index edge_index;
+
+// 					Node node_sample;
+
+// 					uint attempts=1;
+
+// 					for(;;){
+// 						edge_index = rand()%pre_neighbor_count;
+// 						node_sample = pre_neighbors[edge_index];
+// 						if(NodeTracker_add_succesfully(&node_tracker, node_sample))
+// 							break;
+
+// 						attempts++;
+// 					}
+					
+// 					HashSet_add_node(&node_hash_set, node_sample);
+// 					HashSet_add_node(&load_set, node_sample);
+					
+
+// 					edge_index_canvas[cursor++] = offset + edge_index;
+// 				}
+// 			}
+// 		}
+
+		
+// 		PyArrayObject* edge_indices = index_array_to_numpy(edge_index_canvas, cursor);
+		
+
+// 		PyArrayObject* new_layer = HashSet_to_numpy(&node_hash_set);
+// 		PyArrayObject* layer_load = HashSet_to_numpy(&load_set);
+
+// 		// we swap the 2 hashsets since node_hash_set already contains the nodes
+// 		// that are needed for load_set in next iteration
+// 		// NOTE: simply overwriting load_set doesn't work since that would introduce
+// 		// a dangling pointer with load_set.keys 
+// 		HashSet tmp = load_set;
+// 		load_set = node_hash_set;
+// 		node_hash_set = tmp;
+
+
+// 		prev_size = PyArray_SIZE(new_layer);
+// 		prev_layer = new_layer;
+
+// 		PyList_SET_ITEM(samples_per_layer, layer-1, (PyObject*)new_layer);
+// 		PyList_SET_ITEM(load_per_layer, layer-1, (PyObject*)layer_load);
+// 		PyList_SET_ITEM(edge_indices_between_layers, layer-1, (PyObject*)edge_indices);
+// 	}
+
+// 	free(node_tracker.nodes);
+// 	HashSet_free(&load_set);
+// 	HashSet_free(&node_hash_set);
+// 	free(edge_index_canvas);
+
+// 	return PyTuple_Pack(3, samples_per_layer, edge_indices_between_layers, load_per_layer);
+// }
 
 
 static PyMethodDef GMSamplersMethods[] = {
@@ -1142,10 +1188,6 @@ PyMODINIT_FUNC PyInit_csamplers(){
 		Py_DECREF(module);
 		return NULL;
 	}
-
-	
-
-	// GMSamplers_memory_canvas = malloc(GMSamplers_memory_canvas_size);
 
 	return module;
 }
