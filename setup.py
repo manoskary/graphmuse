@@ -29,7 +29,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Topic :: Scientific/Engineering :: Graph Deep Learning",
     ],
-    include_dirs=[os.path.join(numpy.get_include(),"numpy")],
+    include_dirs=[os.path.join(numpy.get_include(),"numpy"), "include"],
     # ext_modules=[module],
     ext_modules= ext_modules,
     author='Emmanouil Karystinaios',
