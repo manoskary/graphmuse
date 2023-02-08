@@ -30,8 +30,9 @@ class TestSamplers(unittest.TestCase):
             print(edges)
             # g.print()
             
+            target = numpy.array([1,4,9], dtype=numpy.uint32)
 
-            samples_per_layer, edge_indices_between_layers, load_per_layer = sam.sample_neighbors(g, 3, 3)
+            samples_per_layer, edge_indices_between_layers, load_per_layer = sam.sample_neighbors(g, 3, 2, target)
 
             for l in range(len(edge_indices_between_layers)-1,-1,-1):
                 print("-------------------------------------------")

@@ -72,6 +72,8 @@ static void HashSet_new(HashSet* hash_set, Key expected_size){
 	hash_set->keys = (Key*)malloc((sizeof(Key) + sizeof(bool))*hash_set->capacity);
 	hash_set->is_set = (bool*)(hash_set->keys + hash_set->capacity);
 
+	assert(hash_set->keys);
+
 	hash_set->probe_skip = 1 + rand()%(hash_set->capacity-1);
 
 	//TODO: Backup if totient(new_capacity)/new_capacity is too low for this loop to terminate quickly enough
@@ -84,6 +86,8 @@ static void HashSet_free(HashSet* hs){
 }
 
 static void HashSet_init(HashSet* hash_set){
+	assert(hash_set->keys);
+
 	for(Key k = 0; k<hash_set->capacity; k++)
 		hash_set->is_set[k]=false;
 
