@@ -32,7 +32,7 @@ class TestSamplers(unittest.TestCase):
             
             target = numpy.array([1,4,9], dtype=numpy.uint32)
 
-            samples_per_layer, edge_indices_between_layers, load_per_layer = sam.sample_neighbors(g, 3, 2, target)
+            samples_per_layer, edge_indices_between_layers, load_per_layer = sam.sample_layerwise(g, 3, 3, target)
 
             for l in range(len(edge_indices_between_layers)-1,-1,-1):
                 print("-------------------------------------------")
