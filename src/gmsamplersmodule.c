@@ -596,37 +596,10 @@ static PyTypeObject GraphType = {
 };
 
 
-/* 	TODO
-		figure out how to do second hashing into a NodeTracker or how to replace linear search
-		issue is that size changes
-			- 	scale factors coprime to size (in order to visit all indices "randomly") would have to be computed every time size changes
-				(size - 1 is always coprime with size) 
-			- 	not sure how close remainders are if size increases, might make hashing pointless
-*/
 
 
-typedef struct{
-	Index capacity;
-	Index tracked;
-	Node* nodes;
-} NodeTracker;
 
 
-static Index NodeTracker_index(NodeTracker* nt, Node n){
-	for(Index i=0; i<nt->tracked; i++)
-		if(n == nt->nodes[i])
-			return i;
-
-	return nt->capacity;
-}
-
-static bool NodeTracker_add_succesfully(NodeTracker* nt, Node n){
-	if(NodeTracker_index(nt, n) < nt->capacity)
-		return false;
-
-	nt->nodes[nt->tracked++] = n;
-	return true;
-}
 
 
 
@@ -802,12 +775,12 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 	HashSet node_hash_set;
 	HashSet_new(&node_hash_set, prev_size);
 
-	NodeTracker node_tracker = {};
-	node_tracker.capacity = samples_per_node;
-	node_tracker.nodes = (Node*)malloc(samples_per_node*sizeof(Node));
-	node_tracker.capacity = samples_per_node;
-	assert(node_tracker.nodes);
+	HashSet node_tracker;
+	HashSet_new(&node_tracker, samples_per_node);
 
+	
+
+	// We allocate this much upfront because it will be used all almost surely
 	Index* edge_index_canvas = (Index*)malloc(sizeof(Index)*prev_size*power(samples_per_node, depth));
 
 	assert(edge_index_canvas);
@@ -828,8 +801,6 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 
 			Index offset = graph->pre_neighbor_offsets[Node_To_Index(dst_node)];
 			Index pre_neighbor_count = graph->pre_neighbor_offsets[Node_To_Index(dst_node)+1]-graph->pre_neighbor_offsets[Node_To_Index(dst_node)];
-
-			//Node* pre_neighbors = (Node*)PyArray_GETPTR2(graph->edge_list, 0, offset);
 
 			if(pre_neighbor_count <= samples_per_node){
 				for(Index i=0; i<pre_neighbor_count; i++){
@@ -874,8 +845,8 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 				free(perm);
 			}
 			else{
-				node_tracker.tracked = 0;
-				
+				HashSet_init(&node_tracker);
+
 				for(uint sample=0; sample<samples_per_node; sample++){
 					Index edge_index;
 
@@ -886,7 +857,7 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 					for(;;){
 						edge_index = rand()%pre_neighbor_count;
 						node_sample = *((Node*)PyArray_GETPTR2(graph->edge_list, 0, offset + edge_index));
-						if(NodeTracker_add_succesfully(&node_tracker, node_sample))
+						if(HashSet_add_node(&node_tracker, node_sample))
 							break;
 
 						attempts++;
@@ -922,7 +893,7 @@ static PyObject* GMSamplers_sample_neighbors(PyObject* csamplers, PyObject* args
 		PyList_SET_ITEM(edge_indices_between_layers, layer-1, (PyObject*)edge_indices);
 	}
 
-	free(node_tracker.nodes);
+	HashSet_free(&node_tracker);
 	HashSet_free(&load_set);
 	HashSet_free(&node_hash_set);
 	free(edge_index_canvas);
