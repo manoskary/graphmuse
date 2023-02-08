@@ -1,5 +1,5 @@
 import numpy as np
-from cython_graph import GraphFromAdj
+# from cython_graph import GraphFromAdj
 import torch
 from numpy.lib import recfunctions as rfn
 import os
@@ -160,7 +160,7 @@ def edges_from_note_array(note_array):
     edg_dst = list()
     start_rest_index = len(note_array)
     for i, x in enumerate(note_array):
-        for j in np.where((note_array["onset_div"] == x["onset_div"]) & (note_array["id"] != x["id"]))[0]:
+        for j in np.where((note_array["onset_div"] == x["onset_div"]))[0]: #& (note_array["id"] != x["id"]))[0]:
             edg_src.append(i)
             edg_dst.append(j)
 
