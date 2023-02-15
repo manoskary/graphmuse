@@ -1,0 +1,5 @@
+numpy
+torch
+torch_scatter
+torch_sparse
+partitura
