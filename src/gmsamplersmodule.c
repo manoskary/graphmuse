@@ -56,6 +56,10 @@ static bool HashSet_add_node(HashSet* hs, Node n){
 	return HashSet_add(hs, Node_hash(n));
 }
 
+static bool HashSet_is_node_in(HashSet* hs, Node n){
+	return HashSet_is_in(hs, Node_hash(n));
+}
+
 static PyArrayObject* HashSet_to_numpy(HashSet* hash_set){
 	PyArrayObject* np_arr = new_node_numpy((Index)hash_set->size);
 
@@ -581,6 +585,10 @@ static Node src_node_at(Graph* g, Index i){
 	return *((Node*)PyArray_GETPTR2(g->edge_list, 0, i));
 }
 
+static Node dst_node_at(Graph* g, Index i){
+	return *((Node*)PyArray_GETPTR2(g->edge_list, 1, i));
+}
+
 static PyMethodDef Graph_methods[] = {
 	{"print", (PyCFunction)Graph_print, METH_NOARGS, "print the graph"},
 	{NULL}
@@ -681,6 +689,10 @@ static bool is_subset_of(Node* lhs, Index lhs_size, Node* rhs, Index rhs_size){
 
 
 
+
+
+
+
 static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args){
 	uint depth;
 	Index samples_per_node;
@@ -721,7 +733,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 
 	PyArrayObject* prev_layer;
 
-	if(target_nodes == NULL){
+	if(target_nodes == NULL | target_nodes == Py_None){
 		PyArrayObject* init_layer = new_node_numpy(MACRO_MIN(samples_per_node,graph->node_count));
 
 		if(init_layer == NULL){
@@ -906,7 +918,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 }
 
 
-static PyObject* GMSamplers_sample_layerwise(PyObject* csamplers, PyObject* args){
+static PyObject* GMSamplers_sample_layerwise_randomly_connected(PyObject* csamplers, PyObject* args){
 	uint depth;
 	Index samplesize_per_layer;
 	PyArrayObject* target_nodes = NULL;
@@ -946,7 +958,7 @@ static PyObject* GMSamplers_sample_layerwise(PyObject* csamplers, PyObject* args
 
 	PyArrayObject* prev_layer;
 
-	if(target_nodes == NULL){
+	if(target_nodes == NULL | target_nodes == Py_None){
 		PyArrayObject* init_layer = new_node_numpy(MACRO_MIN(samplesize_per_layer,graph->node_count));
 
 		if(init_layer == NULL){
@@ -1003,7 +1015,6 @@ static PyObject* GMSamplers_sample_layerwise(PyObject* csamplers, PyObject* args
 
 	HashSet node_hash_set;
 	HashSet_new(&node_hash_set, prev_size);
-	assert(node_tracker.nodes);
 
 	Index* edge_index_canvas = (Index*)malloc(sizeof(Index)*prev_size);
 
@@ -1138,10 +1149,220 @@ static PyObject* GMSamplers_sample_layerwise(PyObject* csamplers, PyObject* args
 	return PyTuple_Pack(3, samples_per_layer, edge_indices_between_layers, load_per_layer);
 }
 
+static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers, PyObject* args){
+	uint depth;
+	Index samplesize_per_layer;
+	PyArrayObject* target_nodes = NULL;
+	Graph* graph;
+
+	if(!PyArg_ParseTuple(args, "OII|O", (PyObject**)&graph, &depth, (uint*)&samplesize_per_layer, (PyObject**)&target_nodes)){
+		printf("If you don't provide proper arguments, you can't have any layerwise sampling.\nHow can you have any layerwise sampling if you don't provide proper arguments?\n");
+		return NULL;
+	}
+
+	/* 	TODO
+		disallow samplesize_per_layer > graph->node_count, it just doesn't make sense
+		
+		emit warning if (maximum) total number of samples > graph->node_count
+
+		maybe (but really only maybe) check if target nodes actually occur in graph
+	*/
+
+	PyObject* samples_per_layer = PyList_New(depth+1);
+	PyObject* load_per_layer = PyList_New(depth);
+	PyObject* edge_indices_between_layers = PyList_New(depth);
+
+
+	if((samples_per_layer == NULL) | (load_per_layer == NULL) | (edge_indices_between_layers == NULL)){
+		printf("can't create return pylists\n");
+
+		Py_XDECREF(samples_per_layer);
+		Py_XDECREF(load_per_layer);
+		Py_XDECREF(edge_indices_between_layers);
+
+		return NULL;
+	}
+
+	Index prev_size;
+
+	HashSet load_set;
+
+	PyArrayObject* prev_layer;
+
+	if(target_nodes == NULL | target_nodes == Py_None){
+		PyArrayObject* init_layer = new_node_numpy(MACRO_MIN(samplesize_per_layer,graph->node_count));
+
+		if(init_layer == NULL){
+			puts("couldn't create init layer");
+			Py_DECREF(samples_per_layer);
+			Py_DECREF(edge_indices_between_layers);
+			Py_DECREF(load_per_layer);
+			return NULL;
+		}
+
+		HashSet_new(&load_set, samplesize_per_layer);
+		HashSet_init(&load_set);
+
+		Node* init_nodes = (Node*)PyArray_DATA(init_layer);
+
+		for(uint sample=0; sample<samplesize_per_layer; sample++){
+			Node node_sample;
+
+			for(;;){
+				node_sample = rand()%graph->node_count; // TODO: need to make sure these are valid samples
+				if(HashSet_add_node(&load_set, node_sample))
+					break;
+			}
+			
+			*init_nodes++ = node_sample;
+		}
+
+		PyList_SET_ITEM(samples_per_layer, depth, (PyObject*)init_layer);
+
+		prev_size = samplesize_per_layer;
+
+		prev_layer = init_layer;
+	}
+	else{
+		//TODO: what to do if target_nodes is not owned by the caller?
+		//TODO: what if target nodes doesnt have shape (N,) or (N,1)?
+		Py_INCREF(target_nodes);
+		prev_size = PyArray_SIZE(target_nodes);
+
+		PyList_SET_ITEM(samples_per_layer, depth, (PyObject*)target_nodes);
+
+		
+		HashSet_new(&load_set, prev_size);
+		HashSet_init(&load_set);
+
+		Node* raw_target_nodes = PyArray_DATA(target_nodes);
+
+		for(uint n = 0 ; n < prev_size; n++)
+			HashSet_add_node(&load_set, *raw_target_nodes++);
+
+
+		prev_layer = target_nodes;
+	}
+
+	HashSet node_hash_set;
+	HashSet_new(&node_hash_set, prev_size);
+
+	// Index* edge_index_canvas = (Index*)malloc(sizeof(Index)*prev_size);
+
+	// assert(edge_index_canvas);
+
+	Index* permutation_canvas = NULL;
+	Index permutation_canvas_size=0;
+	
+	for(uint layer=depth;layer>0; layer--){
+		Node* prev_layer_nodes = (Node*)PyArray_DATA(prev_layer);
+
+		Index total_pre_neighbor_count = 0;
+
+		for(Index n=0; n<PyArray_SIZE(prev_layer); n++){
+			Node dst = prev_layer_nodes[n];
+			total_pre_neighbor_count += graph->pre_neighbor_offsets[Node_To_Index(dst)+1]-graph->pre_neighbor_offsets[Node_To_Index(dst)];
+		}
+
+		if(permutation_canvas_size < total_pre_neighbor_count){
+			free(permutation_canvas);
+			permutation_canvas = (Index*)malloc(sizeof(Index)*total_pre_neighbor_count);
+			permutation_canvas_size = total_pre_neighbor_count;
+		}
+		
+		
+		Index cursor=0;
+
+		for(Index n=0; n<PyArray_SIZE(prev_layer); n++){
+			Node dst = prev_layer_nodes[n];
+
+			Index pre_neighbor_count = graph->pre_neighbor_offsets[Node_To_Index(dst)+1]-graph->pre_neighbor_offsets[Node_To_Index(dst)];
+			Index offset = graph->pre_neighbor_offsets[Node_To_Index(dst)];
+
+			for(Index i=0; i<pre_neighbor_count; i++)
+				permutation_canvas[cursor++] = offset + i;
+		}
+
+		HashSet_init(&node_hash_set);
+
+		cursor=0;
+		while(cursor<total_pre_neighbor_count){
+			Index rand_i = cursor + rand()%(total_pre_neighbor_count-cursor);
+
+			Node node_sample = src_node_at(graph, permutation_canvas[rand_i]);
+
+			HashSet_add_node(&node_hash_set, node_sample);
+			HashSet_add_node(&load_set, node_sample);
+
+			Int l = (Int)cursor;
+			Int r = ((Int)total_pre_neighbor_count)-1;
+			
+			while(true){
+				while(l<total_pre_neighbor_count && src_node_at(graph, permutation_canvas[(Index)l]) == node_sample)
+					l++;
+
+				
+				while(r>l && src_node_at(graph, permutation_canvas[(Index)r]) != node_sample)
+					r--;
+
+				if(l < r){
+					Index tmp = permutation_canvas[(Index)l];
+					permutation_canvas[(Index)l] = permutation_canvas[(Index)r];
+					permutation_canvas[(Index)r] = tmp;
+
+					l++;
+					r--;
+				}
+				else
+					break;
+			}
+
+			cursor = (Index)l;
+			
+			
+
+			if(node_hash_set.size == samplesize_per_layer)
+				break;		
+		}
+
+
+		
+		PyArrayObject* edge_indices = index_array_to_numpy(permutation_canvas, cursor);
+		
+
+		PyArrayObject* new_layer = HashSet_to_numpy(&node_hash_set);
+		PyArrayObject* layer_load = HashSet_to_numpy(&load_set);
+
+		// we swap the 2 hashsets since node_hash_set already contains the nodes
+		// that are needed for load_set in next iteration
+		// NOTE: simply overwriting load_set doesn't work since that would introduce
+		// a dangling pointer with load_set.keys 
+		HashSet tmp = load_set;
+		load_set = node_hash_set;
+		node_hash_set = tmp;
+
+
+		prev_size = PyArray_SIZE(new_layer);
+		prev_layer = new_layer;
+
+		PyList_SET_ITEM(samples_per_layer, layer-1, (PyObject*)new_layer);
+		PyList_SET_ITEM(load_per_layer, layer-1, (PyObject*)layer_load);
+		PyList_SET_ITEM(edge_indices_between_layers, layer-1, (PyObject*)edge_indices);
+	}
+
+	HashSet_free(&load_set);
+	HashSet_free(&node_hash_set);
+	//free(edge_index_canvas);
+	free(permutation_canvas);
+
+	return PyTuple_Pack(3, samples_per_layer, edge_indices_between_layers, load_per_layer);
+}
+
 
 static PyMethodDef GMSamplersMethods[] = {
 	{"sample_nodewise", GMSamplers_sample_nodewise, METH_VARARGS, "Random sampling within a graph through multiple layers where each pre-neighborhood of a node in a layer gets sampled separately."},
-	{"sample_layerwise", GMSamplers_sample_layerwise, METH_VARARGS, "Random sampling within a graph through multiple layers where the pre-neighborhood of a layer gets sampled jointly."},
+	{"sample_layerwise_fully_connected", GMSamplers_sample_layerwise_fully_connected, METH_VARARGS, "Random sampling within a graph through multiple layers where the pre-neighborhood of a layer gets sampled jointly and the layers are fully connected."},
+	{"sample_layerwise_randomly_connected", GMSamplers_sample_layerwise_randomly_connected, METH_VARARGS, "Random sampling within a graph through multiple layers where the pre-neighborhood of a layer gets sampled jointly, but only a random subset of the connections between layers is sampled."},
 	{"compute_edge_list", GMSamplers_compute_edge_list, METH_VARARGS, "Compute edge list from onset_div and duration_div."},
 	{NULL, NULL, 0, NULL}
 };

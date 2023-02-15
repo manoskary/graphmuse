@@ -27,12 +27,12 @@ class TestSamplers(unittest.TestCase):
 
             g = sam.Graph(edges,10)
 
-            print(edges)
+            #print(edges)
             # g.print()
             
             target = numpy.array([1,4,9], dtype=numpy.uint32)
 
-            samples_per_layer, edge_indices_between_layers, load_per_layer = sam.sample_layerwise(g, 3, 3, target)
+            samples_per_layer, edge_indices_between_layers, load_per_layer = sam.sample_layerwise_randomly_connected(g, 3, 3, target)
 
             for l in range(len(edge_indices_between_layers)-1,-1,-1):
                 print("-------------------------------------------")
