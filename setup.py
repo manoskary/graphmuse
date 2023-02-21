@@ -10,12 +10,19 @@ graph = [os.path.join(dirname, "graphmuse", "utils", x) for x in ["cython_graph.
 # module = cythonize(graph)
 ext_modules = [
     setuptools.Extension(
-        name="graphmuse.samplers.csamplers", sources=[os.path.join("src", "gmsamplersmodule.c")])]
+        name="graphmuse.samplers.csamplers", sources=[os.path.join("src", "gmsamplersmodule.c")], extra_compile_args = ["-fopenmp"],
+            extra_link_args = ["-fopenmp"])]
 
 os.environ["CC"] = "gcc"
 os.environ["CXX"] = "gcc"
 
-print(numpy.get_include())
+from psutil import cpu_count
+
+# this doesn't necessarily show the number of available cores for a process
+# however since this is just setting a default value, the number of logical cores should be used
+# for number of available cores, use len(psutil.Process().cpu_affinity())
+os.environ["OMP_NUM_THREADS"] = str(cpu_count())
+
 
 setuptools.setup(
     name='graphmuse',
