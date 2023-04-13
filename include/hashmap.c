@@ -29,7 +29,6 @@ typedef uint32_t Value;
 // ASSUMPTION: N is a power of 2
 // then any odd number is co-prime with N
 static Key skip_hash(Key k, Key N){
-	ASSERT(100<0.1);
 	#ifndef GM_DEBUG_OFF
 	Key bit_counter=0;
 	while(N>0){
