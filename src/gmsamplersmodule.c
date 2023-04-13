@@ -6,7 +6,6 @@
 #define PY_ARRAY_UNIQUE_SYMBOL sam_ARRAY_API
 #include <ndarraytypes.h>
 #include <ndarrayobject.h>
-#include <omp.h>
 
 
 #define MACRO_MAX(a,b) ((a)<(b))? (b) : (a)
@@ -69,6 +68,10 @@ static PyArrayObject* HashSet_to_numpy(HashSet* hash_set){
 
 	return np_arr;
 }
+
+#include <threadpool.c>
+
+ThreadPool* GMSamplers_thread_pool;
 
 /*
 static void count_neighbors(Index from, Index to, Index node_count, Index* neighbor_counts, float* onset_beat, float* duration_beat, float* pitch){
@@ -290,13 +293,38 @@ static void count_neighbors(Index node_count, Index* neighbor_counts, Index from
 					break;
 			}
 		}
-		neighbor_counts[i+1] = neighbor_count;
+		//neighbor_counts[i+1] = neighbor_count;
+		neighbor_counts[i + 1 - from] = neighbor_count;
 	}
+}
+
+struct CountNeighborsArgs{
+	Index node_count; 
+	Index* neighbor_counts;
+	Index thread_count;
+	int* onset_div;
+	int* duration_div;
+};
+
+#define CLS 64
+
+
+static struct Jobs count_neighbors_job(void* shared_args, void* local_args, struct Thread_ID thread_ID){
+	struct CountNeighborsArgs* cna = (struct CountNeighborsArgs*)shared_args;
+
+	Index job_ID = *((Index*)local_args);
+
+	Index from = job_ID*(cna->node_count/cna->thread_count);
+	Index to = (job_ID == cna->thread_count - 1)? cna->node_count: from + cna->node_count/cna->thread_count;
+
+	count_neighbors(cna->node_count, cna->neighbor_counts + from + job_ID*(CLS/sizeof(Index)), from, to, cna->onset_div, cna->duration_div);
+
+	return NO_JOBS;
 }
 
 static void neighbor_counts_to_offsets(Index node_count, Index* neighbor_counts){
 	// TODO: SIMD
-	for(Index n=1; n+1<node_count+1; n++)
+	for(Index n=0; n+1<node_count+1; n++)
 		neighbor_counts[n+1]+=neighbor_counts[n];
 }
 
@@ -453,29 +481,92 @@ static PyObject* GMSamplers_compute_edge_list(PyObject* csamplers, PyObject* arg
 
 	assert(node_count == (Index)PyArray_DIM(duration_div, 0));
 
+	#ifdef Thread_Count_Arg
 
+	const Index thread_count = Thread_Count_Arg;//(Index)omp_get_max_threads();
 
-	Index* neighbor_counts = (Index*)malloc(sizeof(Index)*(node_count+1));
+	#else
+
+	const Index thread_count = 1;
+
+	#endif
+
+	Index* neighbor_counts = (Index*)malloc(sizeof(Index)*(node_count+1) + CLS*(thread_count-1));
 
 	assert(neighbor_counts);
 
+	
+
+	
+
 	// TODO: see if you can merge the 2 parallel directives so that the main thread executes neighbor_counts_to_offsets while the worker threads wait
 
-	Index thread_count = (Index)omp_get_max_threads();
+	#ifndef Thread_Count_Arg
 
-	#pragma omp parallel num_threads(thread_count)
-	{
-		Index ID = (Index)omp_get_thread_num();
-		Index from = ID*(node_count/thread_count);
-		Index to = (ID == (Index)omp_get_num_threads()-1)? node_count: (ID+1)*(node_count/thread_count);
-
-
-		count_neighbors(node_count, neighbor_counts, from, to, (int*)PyArray_DATA(onset_div), (int*)PyArray_DATA(duration_div));
-	}
-	
 	neighbor_counts[0]=0;
+	count_neighbors(node_count, neighbor_counts, 0, node_count, (int*)PyArray_DATA(onset_div), (int*)PyArray_DATA(duration_div));
 
 	neighbor_counts_to_offsets(node_count, neighbor_counts);
+
+	#else
+
+	GMSamplers_thread_pool->sync_handle->job_process = count_neighbors_job;
+
+	struct CountNeighborsArgs shared_args;
+
+	shared_args.node_count = node_count;
+	shared_args.thread_count = thread_count;
+	shared_args.neighbor_counts = neighbor_counts;
+	shared_args.onset_div = (int*)PyArray_DATA(onset_div);
+	shared_args.duration_div = (int*)PyArray_DATA(duration_div);
+
+
+
+	Index* local_args = (Index*)malloc(sizeof(Index)*thread_count);
+
+	for(Index t=0; t<thread_count; t++){
+		local_args[t]=t;
+
+		GMSamplers_thread_pool->sync_handle->job_queue->data[t] = (void*)(local_args+t);
+	}
+	
+	
+	GMSamplers_thread_pool->sync_handle->job_queue->size = thread_count;
+	GMSamplers_thread_pool->sync_handle->job_queue->shared_data = (void*)(&shared_args);
+
+	ThreadPool_wakeup_workers(GMSamplers_thread_pool);
+
+	ThreadPool_participate_until_completion(GMSamplers_thread_pool);
+
+	neighbor_counts[0]=0;
+
+	for(Index n=1; n<node_count/thread_count+1; n++)
+		neighbor_counts[n]+=neighbor_counts[n-1];
+
+	for(Index t=1; t<thread_count-1; t++){
+		Index write_from = t*(node_count/thread_count) + 1;
+		Index write_to = write_from + node_count/thread_count;
+
+		Index read_from = t*(node_count/thread_count + CLS/sizeof(Index)) + 1;
+
+		neighbor_counts[write_from]=neighbor_counts[write_from-1]+neighbor_counts[read_from];
+
+		for(Index n = write_from; n<write_to; n++)
+			neighbor_counts[n]=neighbor_counts[n-1] + neighbor_counts[n - write_from + read_from];
+	}
+
+	Index t = thread_count-1;
+	Index write_from = t*(node_count/thread_count) + 1;
+	Index write_to = node_count+1;
+
+	Index read_from = t*(node_count/thread_count + CLS/sizeof(Index)) + 1;
+
+	neighbor_counts[write_from]=neighbor_counts[write_from-1]+neighbor_counts[read_from];
+
+	for(Index n = write_from; n<write_to; n++)
+		neighbor_counts[n]=neighbor_counts[n-1] + neighbor_counts[n - write_from + read_from];
+
+	#endif
 
 	const npy_intp dims[2] = {2, neighbor_counts[node_count]};
 	
@@ -485,16 +576,8 @@ static PyObject* GMSamplers_compute_edge_list(PyObject* csamplers, PyObject* arg
 
 	PyArrayObject* edge_types = (PyArrayObject*)PyArray_SimpleNew(1, &dim, EType_Eqv_In_Numpy);
 
-	thread_count = (Index)omp_get_max_threads();
+	fill_in_neighbors(node_count, neighbor_counts, edge_list, edge_types,0, node_count, (int*)PyArray_DATA(onset_div), (int*)PyArray_DATA(duration_div));
 
-	#pragma omp parallel num_threads(thread_count)
-	{
-		Index ID = (Index)omp_get_thread_num();
-		Index from = ID*(node_count/thread_count);
-		Index to = (ID == (Index)omp_get_num_threads()-1)? node_count: (ID+1)*(node_count/thread_count);
-	
-		fill_in_neighbors(node_count, neighbor_counts, edge_list, edge_types,from, to, (int*)PyArray_DATA(onset_div), (int*)PyArray_DATA(duration_div));
-	}
 	free(neighbor_counts);
 
 	return PyTuple_Pack(2, edge_list, edge_types);
@@ -705,8 +788,18 @@ static bool is_subset_of(Node* lhs, Index lhs_size, Node* rhs, Index rhs_size){
 	return true;
 }
 
+struct SampleNodewiseLocals{
+	Node sample_src;
+	uint depth;
+};
 
+struct SampleNodewiseShared{
 
+};
+
+// static struct Jobs sample_nodewise_job(void* shared_args, void* local_args, struct Thread_ID ID){
+
+// }
 
 
 
@@ -1368,6 +1461,16 @@ PyMODINIT_FUNC PyInit_csamplers(){
 		Py_DECREF(module);
 		return NULL;
 	}
+
+	#ifdef Thread_Count_Arg
+	GMSamplers_thread_pool = (ThreadPool*)malloc(sizeof(ThreadPool) + sizeof(Queue) + sizeof(SynchronizationHandle));
+
+	Queue* q = (Queue*)(GMSamplers_thread_pool+1);
+
+	SynchronizationHandle* i = (SynchronizationHandle*)(q+1);
+
+	ThreadPool_init(GMSamplers_thread_pool, Thread_Count_Arg-1, i, q);
+	#endif
 
 	return module;
 }

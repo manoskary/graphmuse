@@ -1,22 +1,33 @@
+thread_count = 21
 # cython: language_level=3
 import setuptools
 import os
 import numpy
 from Cython.Build import cythonize
+from psutil import cpu_count
 
 dirname = os.path.dirname(__file__)
 graph = [os.path.join(dirname, "graphmuse", "utils", x) for x in ["cython_graph.pyx", "cython_utils.pyx", "cython_sampler.pyx"]]
 # module = setuptools.Extension('graph', sources=[graph])
 # module = cythonize(graph)
+
+eca = []
+
+if os.name=='posix':
+    eca.append("-DPOSIX")
+
+if thread_count>1:
+    eca.append(f"-DThread_Count_Arg={thread_count}")
+
 ext_modules = [
     setuptools.Extension(
-        name="graphmuse.samplers.csamplers", sources=[os.path.join("src", "gmsamplersmodule.c")], extra_compile_args = ["-fopenmp"],
-            extra_link_args = ["-fopenmp"])]
+        name="graphmuse.samplers.csamplers", sources=[os.path.join("src", "gmsamplersmodule.c")], extra_compile_args = eca,
+            extra_link_args = [])]
 
 os.environ["CC"] = "gcc"
 os.environ["CXX"] = "gcc"
 
-from psutil import cpu_count
+
 
 # this doesn't necessarily show the number of available cores for a process
 # however since this is just setting a default value, the number of logical cores should be used
