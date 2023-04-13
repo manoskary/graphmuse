@@ -1,3 +1,6 @@
+//#define GM_DEBUG_OFF
+#include <GM_assert.h>
+
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <stdbool.h>
@@ -463,7 +466,7 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 			}
 		}
 
-		assert(cursor == neighbor_count);
+		ASSERT(cursor == neighbor_count);
 	}
 }
 
@@ -479,7 +482,7 @@ static PyObject* GMSamplers_compute_edge_list(PyObject* csamplers, PyObject* arg
 
 	Index node_count = (Index)PyArray_DIM(onset_div,0);
 
-	assert(node_count == (Index)PyArray_DIM(duration_div, 0));
+	ASSERT(node_count == (Index)PyArray_DIM(duration_div, 0));
 
 	#ifdef Thread_Count_Arg
 
@@ -493,7 +496,7 @@ static PyObject* GMSamplers_compute_edge_list(PyObject* csamplers, PyObject* arg
 
 	Index* neighbor_counts = (Index*)malloc(sizeof(Index)*(node_count+1) + CLS*(thread_count-1));
 
-	assert(neighbor_counts);
+	ASSERT(neighbor_counts);
 
 	
 
@@ -621,7 +624,7 @@ static PyObject* Graph_new(PyTypeObject* type, PyObject* args, PyObject* kwds){
 
 
 
-		assert(graph->pre_neighbor_offsets);
+		ASSERT(graph->pre_neighbor_offsets);
 	}
 
 	return (PyObject*)graph;
@@ -910,7 +913,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 	// We allocate this much upfront because it will be used all almost surely
 	Index* edge_index_canvas = (Index*)malloc(sizeof(Index)*prev_size*power(samples_per_node, depth));
 
-	assert(edge_index_canvas);
+	ASSERT(edge_index_canvas);
 	
 	for(uint layer=depth;layer>0; layer--){
 		Index cursor=0;
@@ -950,7 +953,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 			else if(samples_per_node > (uint)(0.75*pre_neighbor_count)){
 				Index* perm = (Index*)malloc(sizeof(Index)*pre_neighbor_count);
 
-				assert(perm);
+				ASSERT(perm);
 
 				for(Index i=0; i<pre_neighbor_count; i++)
 					perm[i]=i;
@@ -1129,7 +1132,7 @@ static PyObject* GMSamplers_sample_layerwise_randomly_connected(PyObject* csampl
 
 	Index* edge_index_canvas = (Index*)malloc(sizeof(Index)*prev_size);
 
-	assert(edge_index_canvas);
+	ASSERT(edge_index_canvas);
 
 	Index* permutation_canvas = NULL;
 	Index permutation_canvas_size=0;
@@ -1316,7 +1319,7 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 
 	// Index* edge_index_canvas = (Index*)malloc(sizeof(Index)*prev_size);
 
-	// assert(edge_index_canvas);
+	// ASSERT(edge_index_canvas);
 
 	Index* permutation_canvas = NULL;
 	Int permutation_canvas_size=0;

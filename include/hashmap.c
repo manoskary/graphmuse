@@ -6,7 +6,7 @@ DEPENDENCIES
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <assert.h>
+#include <GM_assert.h>
 
 typedef uint64_t Key;
 typedef uint32_t Value;
@@ -29,13 +29,14 @@ typedef uint32_t Value;
 // ASSUMPTION: N is a power of 2
 // then any odd number is co-prime with N
 static Key skip_hash(Key k, Key N){
-	#ifdef NDEBUG
+	ASSERT(100<0.1);
+	#ifndef GM_DEBUG_OFF
 	Key bit_counter=0;
 	while(N>0){
 		bit_counter+=(Key)(N&1);
 		N>>=1;
 	}
-	assert(bit_counter==1);
+	ASSERT(bit_counter==1);
 	#endif
 
 	return 2*k+1;
@@ -91,7 +92,7 @@ static void HashSet_new(HashSet* hash_set, Key expected_size){
 	hash_set->keys = (Key*)malloc((sizeof(Key) + sizeof(bool))*hash_set->capacity);
 	hash_set->is_set = (bool*)(hash_set->keys + hash_set->capacity);
 
-	assert(hash_set->keys);
+	ASSERT(hash_set->keys);
 }
 
 static void HashSet_free(HashSet* hs){
@@ -99,7 +100,7 @@ static void HashSet_free(HashSet* hs){
 }
 
 static void HashSet_init(HashSet* hash_set){
-	assert(hash_set->keys);
+	ASSERT(hash_set->keys);
 
 	for(Key k = 0; k<hash_set->capacity; k++)
 		hash_set->is_set[k]=false;
@@ -160,7 +161,7 @@ static bool HashSet_add(HashSet* hash_set, Key k){
 		Key* new_keys = (Key*)malloc(new_capacity*(sizeof(Key)+sizeof(bool)));
 		bool* new_is_set = (bool*)(new_keys+new_capacity);
 
-		assert(new_keys);
+		ASSERT(new_keys);
 
 		for(Key i=0;i < new_capacity; i++)
 			new_is_set[i]=false;
@@ -217,16 +218,16 @@ static void HashSet_copy(HashSet* hs, Key* dst){
 		counter += (Key)(hs->is_set[i]);
 
 		if(counter == hs->size){
-			#ifdef NDEBUG
+			#ifndef NDEBUG
 			for(Key j=i+1; j<hs->capacity; j++)
-				assert(!hs->is_set[j]);
+				ASSERT(!hs->is_set[j]);
 			#endif
 
 			return;
 		}
 	}
 
-	assert(counter == hs->size);
+	ASSERT(counter == hs->size);
 }
 
 

@@ -11,7 +11,7 @@ typedef struct{
 } Queue;
 
 static void Queue_put_nocheck(Queue* q, void* data){
-	assert(q->size < q->capacity);
+	ASSERT(q->size < q->capacity);
 	q->data[q->size]=data;
 	q->size++;
 }
