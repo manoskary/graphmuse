@@ -1,2 +1,3 @@
 partitura
 cython
+psutil
