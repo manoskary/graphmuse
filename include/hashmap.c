@@ -14,22 +14,22 @@ typedef uint32_t Value;
 #define MACRO_MAX(a,b) ((a)<(b))? (b) : (a)
 */
 
-static Key gcd(Key a, Key b){
-	Key rem1=a, rem2=b;
+// static Key gcd(Key a, Key b){
+// 	Key rem1=a, rem2=b;
 
-	while(rem2 > 0){
-		Key tmp = rem2;
-		rem2 = rem1%rem2;
-		rem1 = tmp;
-	}
+// 	while(rem2 > 0){
+// 		Key tmp = rem2;
+// 		rem2 = rem1%rem2;
+// 		rem1 = tmp;
+// 	}
 
-	return rem1;
-}
+// 	return rem1;
+// }
 
 // ASSUMPTION: N is a power of 2
 // then any odd number is co-prime with N
 static Key skip_hash(Key k, Key N){
-	#ifndef NDEBUG
+	#ifdef NDEBUG
 	Key bit_counter=0;
 	while(N>0){
 		bit_counter+=(Key)(N&1);
@@ -107,13 +107,15 @@ static void HashSet_init(HashSet* hash_set){
 	hash_set->size = 0;
 }
 
-
+static Key mod_pow2(Key k, Key pow2){
+	return k&(pow2-1);
+}
 
 static Key HashSet_index(HashSet* hash_set, Key k){
 	Key probe = k;
 	const Key probe_skip = skip_hash(k, hash_set->capacity);
 	for(Key attempts=0; attempts < hash_set->capacity; attempts++){
-		probe = probe%hash_set->capacity;
+		probe = mod_pow2(probe, hash_set->capacity);
 
 		if(hash_set->is_set[probe]){
 			if(hash_set->keys[probe] == k)
@@ -138,7 +140,7 @@ static void add_unsafe(HashSet* hash_set, Key k){
 	Key probe = k;
 	const Key probe_skip = skip_hash(k, hash_set->capacity);
 	while(true){
-		probe = probe%hash_set->capacity;
+		probe = mod_pow2(probe, hash_set->capacity);
 
 		if(! hash_set->is_set[probe]){
 			hash_set->keys[probe] = k;
@@ -191,7 +193,7 @@ static bool HashSet_add(HashSet* hash_set, Key k){
 	const Key probe_skip = skip_hash(k, hash_set->capacity);
 
 	while(true){
-		probe = probe%hash_set->capacity;
+		probe = mod_pow2(probe, hash_set->capacity);
 
 		if(! hash_set->is_set[probe]){
 			hash_set->keys[probe] = k;
@@ -215,7 +217,7 @@ static void HashSet_copy(HashSet* hs, Key* dst){
 		counter += (Key)(hs->is_set[i]);
 
 		if(counter == hs->size){
-			#ifndef NDEBUG
+			#ifdef NDEBUG
 			for(Key j=i+1; j<hs->capacity; j++)
 				assert(!hs->is_set[j]);
 			#endif
