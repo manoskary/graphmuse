@@ -1,4 +1,4 @@
-thread_count = 21
+thread_count =  1
 # cython: language_level=3
 import setuptools
 import os
@@ -11,7 +11,7 @@ graph = [os.path.join(dirname, "graphmuse", "utils", x) for x in ["cython_graph.
 # module = setuptools.Extension('graph', sources=[graph])
 # module = cythonize(graph)
 
-eca = []
+eca = ["-std=c11"]
 
 if os.name=='posix':
     eca.append("-DPOSIX")
@@ -29,10 +29,7 @@ os.environ["CXX"] = "gcc"
 
 
 
-# this doesn't necessarily show the number of available cores for a process
-# however since this is just setting a default value, the number of logical cores should be used
-# for number of available cores, use len(psutil.Process().cpu_affinity())
-os.environ["OMP_NUM_THREADS"] = str(cpu_count())
+
 
 
 setuptools.setup(
