@@ -1,3 +1,4 @@
 partitura
 cython
 psutil
+numpy
