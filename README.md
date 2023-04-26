@@ -7,7 +7,7 @@ It contains a core set of graph-based music representations, such as a Heterogen
 It includes functionalities for this graphs such as saving, loading and batching graphs together.
 
 The main core of the library includes accelarated SOTA sampling strategies for Large Graphs, 
-which are implemented in C++ and CUDA. 
+which are implemented in C11 and CUDA. 
 
 
 It implements a variety of graph neural networks for music, including Graph Convolutional Networks (GCN), Graph Attention Networks (GAT), GraphSAGE, and Graph Isomorphism Networks (GIN).
