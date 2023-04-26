@@ -1,5 +1,4 @@
-//#define GM_DEBUG_OFF
-#include <GM_assert.h>
+
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
@@ -46,7 +45,10 @@ static PyArrayObject* new_node_numpy(Index size){
 }
 
 
-
+#include <mt.c>
+//#define GM_DEBUG_OFF
+#include <GM_assert.h>
+#include <threadpool.c>
 #include <hashmap.c>
 
 // this should be fine actually since it is used on random nodes
@@ -72,7 +74,6 @@ static PyArrayObject* HashSet_to_numpy(HashSet* hash_set){
 	return np_arr;
 }
 
-#include <threadpool.c>
 
 ThreadPool* GMSamplers_thread_pool;
 
@@ -1031,6 +1032,47 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 	return PyTuple_Pack(3, samples_per_layer, edge_indices_between_layers, load_per_layer);
 }
 
+static Index sum_preneighbor_counts(Node* prev_layer_nodes, Index prev_layer_nodes_count, Index* pre_neighbor_offsets){
+	Index sum_pre_neighbor_count = 0;
+
+	for(Index n=0; n<prev_layer_nodes_count; n++){
+		Node dst = prev_layer_nodes[n];
+		sum_pre_neighbor_count += pre_neighbor_offsets[Node_To_Index(dst)+1]-pre_neighbor_offsets[Node_To_Index(dst)];
+	}
+
+	return sum_pre_neighbor_count;
+}
+
+static bool conditional_resize_memory_canvas(void** memory_canvas_ptr, Index elem_size, Index* elem_count_ptr, Index min_elem_count){
+	if(*elem_count_ptr < min_elem_count){
+		free(*memory_canvas_ptr);
+		*memory_canvas_ptr = malloc(elem_size*min_elem_count);
+
+		if(*memory_canvas_ptr == NULL){
+			*elem_count_ptr = 0;
+			return false;
+		}
+
+		*elem_count_ptr = min_elem_count;
+	}
+
+	return true;
+}
+
+static void gather_edge_indices(Node* prev_layer_nodes, Index prev_layer_nodes_count, Index* pre_neighbor_offsets, Index* edge_indices){
+	Index cursor=0;
+
+	for(Index n=0; n<prev_layer_nodes_count; n++){
+		Node dst = prev_layer_nodes[n];
+
+		Index pre_neighbor_count = pre_neighbor_offsets[Node_To_Index(dst)+1]-pre_neighbor_offsets[Node_To_Index(dst)];
+		Index offset = pre_neighbor_offsets[Node_To_Index(dst)];
+
+		for(Index i=0; i<pre_neighbor_count; i++)
+			edge_indices[cursor++] = offset + i;
+	}
+}
+
 
 static PyObject* GMSamplers_sample_layerwise_randomly_connected(PyObject* csamplers, PyObject* args){
 	uint depth;
@@ -1134,49 +1176,38 @@ static PyObject* GMSamplers_sample_layerwise_randomly_connected(PyObject* csampl
 
 	ASSERT(edge_index_canvas);
 
-	Index* permutation_canvas = NULL;
-	Index permutation_canvas_size=0;
+	Index* sample_canvas = NULL;
+	Index sample_canvas_size=0;
 	
 	for(uint layer=depth;layer>0; layer--){
 		Node* prev_layer_nodes = (Node*)PyArray_DATA(prev_layer);
 
-		Index total_pre_neighbor_count = 0;
+		
 
-		for(Index n=0; n<PyArray_SIZE(prev_layer); n++){
-			Node dst = prev_layer_nodes[n];
-			total_pre_neighbor_count += graph->pre_neighbor_offsets[Node_To_Index(dst)+1]-graph->pre_neighbor_offsets[Node_To_Index(dst)];
-		}
+		Index sum_pre_neighbor_count = sum_preneighbor_counts(prev_layer_nodes, PyArray_SIZE(prev_layer), graph->pre_neighbor_offsets);
 
-		if(permutation_canvas_size < total_pre_neighbor_count){
-			free(permutation_canvas);
-			permutation_canvas = (Index*)malloc(sizeof(Index)*total_pre_neighbor_count);
-			permutation_canvas_size = total_pre_neighbor_count;
-		}
+		
+
+		bool sample_canvas_valid = conditional_resize_memory_canvas((void**)&sample_canvas, (Index)sizeof(Index), &sample_canvas_size, sum_pre_neighbor_count);
+
+		ASSERT(sample_canvas_valid);
 		
 		
-		Index cursor=0;
-
-		for(Index n=0; n<PyArray_SIZE(prev_layer); n++){
-			Node dst = prev_layer_nodes[n];
-
-			Index pre_neighbor_count = graph->pre_neighbor_offsets[Node_To_Index(dst)+1]-graph->pre_neighbor_offsets[Node_To_Index(dst)];
-			Index offset = graph->pre_neighbor_offsets[Node_To_Index(dst)];
-
-			for(Index i=0; i<pre_neighbor_count; i++)
-				permutation_canvas[cursor++] = offset + i;
-		}
+		gather_edge_indices(prev_layer_nodes, PyArray_SIZE(prev_layer), graph->pre_neighbor_offsets, sample_canvas);
 
 		HashSet_init(&node_hash_set);
 
-		cursor=0;
-		while(cursor<total_pre_neighbor_count){
-			Index rand_i = cursor + rand()%(total_pre_neighbor_count-cursor);
+		// randomly sample edge index from sample_canvas and get the corresponding node sample from that index
+		// swapping randomly selected indices from sample_canvas to the front so that they don't get sampled again
+		Index cursor=0;
+		while(cursor<sum_pre_neighbor_count){
+			Index rand_i = cursor + rand()%(sum_pre_neighbor_count-cursor);
 
-			edge_index_canvas[cursor] = permutation_canvas[rand_i];
+			edge_index_canvas[cursor] = sample_canvas[rand_i];
 
-			Node node_sample = src_node_at(graph, permutation_canvas[rand_i]);
+			Node node_sample = src_node_at(graph, sample_canvas[rand_i]);
 
-			permutation_canvas[rand_i] = permutation_canvas[cursor];
+			sample_canvas[rand_i] = sample_canvas[cursor];
 
 			cursor++;
 
@@ -1214,11 +1245,13 @@ static PyObject* GMSamplers_sample_layerwise_randomly_connected(PyObject* csampl
 	HashSet_free(&load_set);
 	HashSet_free(&node_hash_set);
 	free(edge_index_canvas);
-	free(permutation_canvas);
+	free(sample_canvas);
 
 	return PyTuple_Pack(3, samples_per_layer, edge_indices_between_layers, load_per_layer);
 }
 
+
+// the main difference to nodewise neighbor sampling is that this method samples nodes for each layer by randomly sampling 
 static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers, PyObject* args){
 	uint depth;
 	Index samplesize_per_layer;
@@ -1317,68 +1350,54 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 	HashSet node_hash_set;
 	HashSet_new(&node_hash_set, prev_size);
 
-	// Index* edge_index_canvas = (Index*)malloc(sizeof(Index)*prev_size);
-
-	// ASSERT(edge_index_canvas);
-
-	Index* permutation_canvas = NULL;
-	Int permutation_canvas_size=0;
+	Index* edge_index_canvas = NULL;
+	Index edge_index_canvas_size=0;
 	
 	for(uint layer=depth;layer>0; layer--){
 		Node* prev_layer_nodes = (Node*)PyArray_DATA(prev_layer);
 
-		Int total_pre_neighbor_count = 0;
+		
 
-		for(Index n=0; n<PyArray_SIZE(prev_layer); n++){
-			Node dst = prev_layer_nodes[n];
-			total_pre_neighbor_count += (Int)graph->pre_neighbor_offsets[Node_To_Index(dst)+1]-graph->pre_neighbor_offsets[Node_To_Index(dst)];
-		}
+		Index sum_pre_neighbor_count = sum_preneighbor_counts(prev_layer_nodes, PyArray_SIZE(prev_layer), graph->pre_neighbor_offsets);
 
-		if(permutation_canvas_size < total_pre_neighbor_count){
-			free(permutation_canvas);
-			permutation_canvas = (Index*)malloc(sizeof(Index)*total_pre_neighbor_count);
-			permutation_canvas_size = total_pre_neighbor_count;
-		}
+		
+
+		bool edge_index_canvas_valid = conditional_resize_memory_canvas((void**)&edge_index_canvas, (Index)sizeof(Index), &edge_index_canvas_size, sum_pre_neighbor_count);
+
+		ASSERT(edge_index_canvas_valid);
 		
 		
-		Int cursor=0;
-
-		for(Index n=0; n<PyArray_SIZE(prev_layer); n++){
-			Node dst = prev_layer_nodes[n];
-
-			Index pre_neighbor_count = graph->pre_neighbor_offsets[Node_To_Index(dst)+1]-graph->pre_neighbor_offsets[Node_To_Index(dst)];
-			Index offset = graph->pre_neighbor_offsets[Node_To_Index(dst)];
-
-			for(Index i=0; i<pre_neighbor_count; i++)
-				permutation_canvas[cursor++] = offset + i;
-		}
+		gather_edge_indices(prev_layer_nodes, PyArray_SIZE(prev_layer), graph->pre_neighbor_offsets, edge_index_canvas);
 
 		HashSet_init(&node_hash_set);
 
-		cursor=0;
-		while(cursor<total_pre_neighbor_count){
-			Index rand_i = cursor + rand()%(total_pre_neighbor_count-cursor);
+		// randomly sample edge index from sample_canvas and get the corresponding node sample from that index
+		// then we swap all edge indices to the front that have all the same src node like the node sample
+		// this fully connects the new node to every node in prev_layer if that edge exists in the graph 
+		Index cursor=0;
+		while(cursor<sum_pre_neighbor_count){
+			Index rand_i = cursor + rand()%(sum_pre_neighbor_count-cursor);
 
-			Node node_sample = src_node_at(graph, permutation_canvas[rand_i]);
+			Node node_sample = src_node_at(graph, edge_index_canvas[rand_i]);
 
 			HashSet_add_node(&node_hash_set, node_sample);
 			HashSet_add_node(&load_set, node_sample);
 
 			Int l = (Int)cursor;
-			Int r = ((Int)total_pre_neighbor_count)-1;
+			Int r = ((Int)sum_pre_neighbor_count)-1;
 			
 			while(true){
-				while(l<total_pre_neighbor_count && src_node_at(graph, permutation_canvas[(Index)l]) == node_sample)
+				while(l<sum_pre_neighbor_count && src_node_at(graph, edge_index_canvas[(Index)l]) == node_sample)
 					l++;
 
 				
-				while(r>l && src_node_at(graph, permutation_canvas[(Index)r]) != node_sample)
+				while(r>l && src_node_at(graph, edge_index_canvas[(Index)r]) != node_sample)
 					r--;
 
 				if(l < r){
-					Index tmp = permutation_canvas[(Index)l];
-					permutation_canvas[(Index)l] = permutation_canvas[(Index)r];
-					permutation_canvas[(Index)r] = tmp;
+					Index tmp = edge_index_canvas[(Index)l];
+					edge_index_canvas[(Index)l] = edge_index_canvas[(Index)r];
+					edge_index_canvas[(Index)r] = tmp;
 
 					l++;
 					r--;
@@ -1397,7 +1416,7 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 
 
 		
-		PyArrayObject* edge_indices = index_array_to_numpy(permutation_canvas, cursor);
+		PyArrayObject* edge_indices = index_array_to_numpy(edge_index_canvas, cursor);
 		
 
 		PyArrayObject* new_layer = HashSet_to_numpy(&node_hash_set);
@@ -1422,9 +1441,8 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 
 	HashSet_free(&load_set);
 	HashSet_free(&node_hash_set);
-	//free(edge_index_canvas);
-	free(permutation_canvas);
-
+	free(edge_index_canvas);
+	
 	return PyTuple_Pack(3, samples_per_layer, edge_indices_between_layers, load_per_layer);
 }
 
@@ -1432,8 +1450,10 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 static PyMethodDef GMSamplersMethods[] = {
 	{"sample_nodewise", GMSamplers_sample_nodewise, METH_VARARGS, "Random sampling within a graph through multiple layers where each pre-neighborhood of a node in a layer gets sampled separately."},
 	{"sample_layerwise_fully_connected", GMSamplers_sample_layerwise_fully_connected, METH_VARARGS, "Random sampling within a graph through multiple layers where the pre-neighborhood of a layer gets sampled jointly and the layers are fully connected."},
+	
 	// TODO: figure out how to sample without collecting all edges in a list first
 	{"sample_layerwise_randomly_connected", GMSamplers_sample_layerwise_randomly_connected, METH_VARARGS, "Random sampling within a graph through multiple layers where the pre-neighborhood of a layer gets sampled jointly, but only a random subset of the connections between layers is sampled."},
+	
 	{"compute_edge_list", GMSamplers_compute_edge_list, METH_VARARGS, "Compute edge list from onset_div and duration_div."},
 	{NULL, NULL, 0, NULL}
 };
