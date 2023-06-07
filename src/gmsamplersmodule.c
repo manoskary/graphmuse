@@ -49,7 +49,9 @@ static PyArrayObject* new_node_numpy(Index size){
 //#define GM_DEBUG_OFF
 #include <GM_assert.h>
 #include <threadpool.c>
-#include <hashmap.c>
+#include <utils.c>
+#include <mt_hashset_static.c>
+#include <hashset.c>
 
 // this should be fine actually since it is used on random nodes
 static Key Node_hash(Node n){
@@ -60,9 +62,9 @@ static bool HashSet_add_node(HashSet* hs, Node n){
 	return HashSet_add(hs, Node_hash(n));
 }
 
-static bool HashSet_is_node_in(HashSet* hs, Node n){
-	return HashSet_is_in(hs, Node_hash(n));
-}
+// static bool HashSet_is_node_in(HashSet* hs, Node n){
+// 	return HashSet_is_in(hs, Node_hash(n));
+// }
 
 static PyArrayObject* HashSet_to_numpy(HashSet* hash_set){
 	PyArrayObject* np_arr = new_node_numpy((Index)hash_set->size);
@@ -74,8 +76,23 @@ static PyArrayObject* HashSet_to_numpy(HashSet* hash_set){
 	return np_arr;
 }
 
+static bool MT_HashSet_Static_add_node(MT_HashSet_Static* hs, Node n){
+	return MT_HashSet_Static_add(hs, Node_hash(n));
+}
 
-ThreadPool* GMSamplers_thread_pool;
+
+static PyArrayObject* MT_HashSet_Static_to_numpy(MT_HashSet_Static* hash_set){
+	PyArrayObject* np_arr = new_node_numpy((Index)MT_HashSet_Static_size(hash_set));
+
+	Node* copy_dst = PyArray_DATA(np_arr);
+
+	MT_HashSet_Static_copy(hash_set, copy_dst);	
+
+	return np_arr;
+}
+
+
+Threadpool* GMSamplers_thread_pool;
 
 /*
 static void count_neighbors(Index from, Index to, Index node_count, Index* neighbor_counts, float* onset_beat, float* duration_beat, float* pitch){
@@ -313,7 +330,7 @@ struct CountNeighborsArgs{
 #define CLS 64
 
 
-static struct Jobs count_neighbors_job(void* shared_args, void* local_args, struct Thread_ID thread_ID){
+static void count_neighbors_job(void* shared_args, void* local_args, struct Thread_ID thread_ID, Stack* s, Mutex* m){
 	struct CountNeighborsArgs* cna = (struct CountNeighborsArgs*)shared_args;
 
 	Index job_ID = *((Index*)local_args);
@@ -322,8 +339,6 @@ static struct Jobs count_neighbors_job(void* shared_args, void* local_args, stru
 	Index to = (job_ID == cna->thread_count - 1)? cna->node_count: from + cna->node_count/cna->thread_count;
 
 	count_neighbors(cna->node_count, cna->neighbor_counts + from + job_ID*(CLS/sizeof(Index)), from, to, cna->onset_div, cna->duration_div);
-
-	return NO_JOBS;
 }
 
 static void neighbor_counts_to_offsets(Index node_count, Index* neighbor_counts){
@@ -526,21 +541,18 @@ static PyObject* GMSamplers_compute_edge_list(PyObject* csamplers, PyObject* arg
 
 
 
-	Index* local_args = (Index*)malloc(sizeof(Index)*thread_count);
+	//Index* local_args = (Index*)malloc(sizeof(Index)*thread_count);
+	bool success = Threadpool_prepare_jobstack(GMSamplers_thread_pool, thread_count, sizeof(Index));
+	ASSERT(success);
 
-	for(Index t=0; t<thread_count; t++){
-		local_args[t]=t;
-
-		GMSamplers_thread_pool->sync_handle->job_queue->data[t] = (void*)(local_args+t);
-	}
+	for(Index t=0; t<thread_count; t++)
+		Stack_push_nocheck(GMSamplers_thread_pool->sync_handle->job_stack, &t);
 	
-	
-	GMSamplers_thread_pool->sync_handle->job_queue->size = thread_count;
-	GMSamplers_thread_pool->sync_handle->job_queue->shared_data = (void*)(&shared_args);
+	GMSamplers_thread_pool->sync_handle->shared_data = (void*)(&shared_args);
 
-	ThreadPool_wakeup_workers(GMSamplers_thread_pool);
+	Threadpool_wakeup_workers(GMSamplers_thread_pool);
 
-	ThreadPool_participate_until_completion(GMSamplers_thread_pool);
+	Threadpool_participate_until_completion(GMSamplers_thread_pool);
 
 	neighbor_counts[0]=0;
 
@@ -673,7 +685,6 @@ static int Graph_init(Graph* graph, PyObject* args, PyObject* kwds){
 
     neighbor_counts_to_offsets(graph->node_count, graph->pre_neighbor_offsets);
 
-
 	return 0;
 }
 
@@ -755,42 +766,42 @@ static uint64 power(uint32 base, uint32 exponent){
 
 
 
-static Index binary_search(Node n, Node* non_decr_list, Index size){
-	Index l=0, r=size-1;
+// static Index binary_search(Node n, Node* non_decr_list, Index size){
+// 	Index l=0, r=size-1;
 
-	while(l<=r){
-		Index probe = (l+r)/2;
+// 	while(l<=r){
+// 		Index probe = (l+r)/2;
 
-		if(non_decr_list[probe] < n)
-			l=probe+1;
-		else if(non_decr_list[probe] > n)
-			r=probe-1;
-		else
-			return probe;
-	}
+// 		if(non_decr_list[probe] < n)
+// 			l=probe+1;
+// 		else if(non_decr_list[probe] > n)
+// 			r=probe-1;
+// 		else
+// 			return probe;
+// 	}
 
-	return size;
-}
+// 	return size;
+// }
 
 
 
-static bool is_subset_of(Node* lhs, Index lhs_size, Node* rhs, Index rhs_size){
-	//ASSUMPTION: lhs and rhs are sorted in ascending order and there are no repeated elements
+// static bool is_subset_of(Node* lhs, Index lhs_size, Node* rhs, Index rhs_size){
+// 	//ASSUMPTION: lhs and rhs are sorted in ascending order and there are no repeated elements
 
-	Index cursor=binary_search(lhs[0], rhs, rhs_size);
+// 	Index cursor=binary_search(lhs[0], rhs, rhs_size);
 
-	if(cursor == rhs_size)
-		return false;
+// 	if(cursor == rhs_size)
+// 		return false;
 
-	for(Index i=1; i < lhs_size; i++){
-		cursor+=(binary_search(lhs[i], rhs+cursor+1, rhs_size-cursor-1)+1);
+// 	for(Index i=1; i < lhs_size; i++){
+// 		cursor+=(binary_search(lhs[i], rhs+cursor+1, rhs_size-cursor-1)+1);
 
-		if(cursor == rhs_size)
-			return false;
-	}
+// 		if(cursor == rhs_size)
+// 			return false;
+// 	}
 
-	return true;
-}
+// 	return true;
+// }
 
 struct SampleNodewiseLocals{
 	Node sample_src;
@@ -798,14 +809,307 @@ struct SampleNodewiseLocals{
 };
 
 struct SampleNodewiseShared{
-
+	Graph* graph;
+	uint target_depth;
+	Index samples_per_node;
+	MT_HashSet_Static* hashset_per_layer;
+	Index** edgeindices_per_layer;
+	_Atomic Index* edgeindices_cursor_per_layer;
 };
 
-// static struct Jobs sample_nodewise_job(void* shared_args, void* local_args, struct Thread_ID ID){
+static void sample_nodewise_mt_static_job(void* shared_args, void* local_args, struct Thread_ID ID, Stack* jobstack, Mutex* jobstack_mutex){
+	struct SampleNodewiseLocals* local = (struct SampleNodewiseLocals*)local_args;
+	struct SampleNodewiseShared* shared = (struct SampleNodewiseShared*)shared_args;
 
-// }
+	struct SampleNodewiseLocals to_push;
+	to_push.depth = local->depth+1;
+
+	Index offset = shared->graph->pre_neighbor_offsets[Node_To_Index(local->sample_src)];
+	Index pre_neighbor_count = shared->graph->pre_neighbor_offsets[Node_To_Index(local->sample_src)+1]-offset;
+
+	
+
+	
+
+	MT_HashSet_Static* hash_set = shared->hashset_per_layer+local->depth;
+	Index* edge_indices = shared->edgeindices_per_layer[local->depth];
+	_Atomic Index* edgeindices_cursor = shared->edgeindices_cursor_per_layer+local->depth;
+
+	if(pre_neighbor_count <= shared->samples_per_node){
+		for(Index i=0; i<pre_neighbor_count; i++){
+			Node pre_neighbor = src_node_at(shared->graph, offset + i);
+
+			if(MT_HashSet_Static_add_node(hash_set, pre_neighbor)){
+				if(to_push.depth < shared->target_depth){
+					to_push.sample_src = pre_neighbor;
+					Mutex_lock(jobstack_mutex);
+					Stack_push(jobstack, &to_push);
+					Mutex_unlock(jobstack_mutex);
+				}
+
+				
+			}
+
+			edge_indices[Atomic_increment(edgeindices_cursor, memory_order_relaxed)] = offset + i;
+		}
+	}
+	/*
+		expected number of attempts to insert a unique sample into set with k elements is n/(n-k)
+		for k=n*f, this results in 1/(1-f), meaning, if we want to limit the expected number of attempts
+		to let's say 4, f has to be at most 3/4=0.75
+
+		if this threshold is reached, random subset is sampled via random permutation
+		this is viable since memory waste is at most 25% (for temporary storage)
+	*/
+	else if(shared->samples_per_node > (uint)(0.75*pre_neighbor_count)){
+		Index* perm = (Index*)malloc(sizeof(Index)*pre_neighbor_count);
+
+		ASSERT(perm);
+
+		for(Index i=0; i<pre_neighbor_count; i++)
+			perm[i]=i;
+		
+
+		for(Index i=0; i<shared->samples_per_node; i++){
+			Index rand_i = i + rand()%(pre_neighbor_count-i);
+
+			Node node_sample = src_node_at(shared->graph, offset + perm[rand_i]);
+
+			
+
+			if(MT_HashSet_Static_add_node(hash_set, node_sample)){
+				
+				
+				if(to_push.depth < shared->target_depth){
+					to_push.sample_src = node_sample;
+					Mutex_lock(jobstack_mutex);
+					Stack_push(jobstack, &to_push);
+					Mutex_unlock(jobstack_mutex);
+				}
+			}
+
+			edge_indices[Atomic_increment(edgeindices_cursor, memory_order_relaxed)] = offset + perm[rand_i];
+
+			
+
+			perm[rand_i]=perm[i];
+		}
+
+		free(perm);
+	}
+	else{
+		HashSet node_tracker;
+		HashSet_new(&node_tracker, shared->samples_per_node);
+		HashSet_init(&node_tracker);
+
+		for(uint sample=0; sample<shared->samples_per_node; sample++){
+			Index edge_index;
+
+			Node node_sample;
+
+			for(;;){
+				edge_index = rand()%pre_neighbor_count;
+				node_sample = src_node_at(shared->graph, offset + edge_index);
+				if(HashSet_add_node(&node_tracker, node_sample))
+					break;
+			}
+
+			if(MT_HashSet_Static_add_node(hash_set, node_sample)){
+				
+				
+				if(to_push.depth < shared->target_depth){
+					to_push.sample_src = node_sample;
+					Mutex_lock(jobstack_mutex);
+					Stack_push(jobstack, &to_push);
+					Mutex_unlock(jobstack_mutex);
+				}
+			}
+
+			edge_indices[Atomic_increment(edgeindices_cursor, memory_order_relaxed)] = offset + edge_index;
+			
+
+			
+		}
+
+		HashSet_free(&node_tracker);
+	}
+}
+
+static PyObject* GMSamplers_sample_nodewise_mt_static(PyObject* csamplers, PyObject* args){
+	uint depth;
+	Index samples_per_node;
+	PyArrayObject* target_nodes = NULL;
+	Graph* graph;
+
+	if(!PyArg_ParseTuple(args, "OII|O", (PyObject**)&graph, &depth, (uint*)&samples_per_node, (PyObject**)&target_nodes)){
+		printf("If you don't provide proper arguments, you can't have any neighbor sampling.\nHow can you have any neighbor sampling if you don't provide proper arguments?\n");
+		return NULL;
+	}
+
+	PyObject* samples_per_layer = PyList_New(depth+1);
+	PyObject* load_per_layer = PyList_New(depth);
+	PyObject* edge_indices_between_layers = PyList_New(depth);
 
 
+	if((samples_per_layer == NULL) | (load_per_layer == NULL) | (edge_indices_between_layers == NULL)){
+		printf("can't create return pylists\n");
+
+		Py_XDECREF(samples_per_layer);
+		Py_XDECREF(load_per_layer);
+		Py_XDECREF(edge_indices_between_layers);
+
+		return NULL;
+	}
+
+
+
+	GMSamplers_thread_pool->sync_handle->job_process = sample_nodewise_mt_static_job;
+
+	bool success = Threadpool_prepare_jobstack(GMSamplers_thread_pool, Thread_Count_Arg, sizeof(struct SampleNodewiseLocals));
+	ASSERT(success);
+
+	PyArrayObject* init_layer;
+
+	HashSet hash_set;
+	HashSet_new(&hash_set, samples_per_node);
+
+	if((target_nodes == NULL) | ((PyObject*)target_nodes == Py_None)){
+		init_layer = new_node_numpy(MACRO_MIN(samples_per_node,graph->node_count));
+
+		if(init_layer == NULL){
+			puts("couldn't create initial layer");
+			return NULL;
+		}
+
+		Node* init_nodes = (Node*)PyArray_DATA(init_layer);
+
+		struct SampleNodewiseLocals to_push;
+		to_push.depth = 0;
+
+		
+		HashSet_init(&hash_set);
+
+		for(uint sample=0; sample<samples_per_node; sample++){
+			Node node_sample;
+
+			for(;;){
+				node_sample = rand()%graph->node_count; // TODO: need to make sure these are valid samples
+				if(HashSet_add_node(&hash_set, node_sample))
+					break;
+			}
+			
+			*init_nodes++ = node_sample;
+			to_push.sample_src = node_sample;
+
+			Stack_push(GMSamplers_thread_pool->sync_handle->job_stack, &to_push);
+		}
+	}
+	else{
+		//TODO: what to do if target_nodes is not owned by the caller?
+		//TODO: what if target nodes doesnt have shape (N,) or (N,1)?
+		Py_INCREF(target_nodes);
+
+		struct SampleNodewiseLocals to_push;
+		to_push.depth = 0;
+
+		Node* raw_target_nodes = PyArray_DATA(target_nodes);
+
+		
+
+		for(uint n = 0 ; n < PyArray_SIZE(target_nodes); n++){
+			to_push.sample_src = raw_target_nodes[n];
+			Stack_push(GMSamplers_thread_pool->sync_handle->job_stack, &to_push);
+		}
+
+
+		init_layer = target_nodes;
+	}
+
+	struct SampleNodewiseShared shared;
+	shared.graph = graph;
+	shared.target_depth = depth;
+	shared.samples_per_node = samples_per_node;
+
+	size_t edge_indices_amount = PyArray_SIZE(init_layer);
+
+	if(samples_per_node == 1)
+		edge_indices_amount*=depth;
+	else
+		edge_indices_amount*=(power(samples_per_node, depth+1)-samples_per_node)/(samples_per_node-1);
+
+
+	void* all_memory = malloc(depth*(sizeof(MT_HashSet_Static) + sizeof(Index*) + sizeof(_Atomic Index)) + sizeof(Index)*edge_indices_amount);
+
+	ASSERT(all_memory);
+
+	shared.hashset_per_layer = (MT_HashSet_Static*)all_memory;
+
+	Key expected_size = PyArray_SIZE(init_layer);
+	for(uint i=0; i<depth; i++){
+		expected_size*=samples_per_node;
+		MT_HashSet_Static_new(shared.hashset_per_layer+i, expected_size);
+		MT_HashSet_Static_init(shared.hashset_per_layer+i);
+	}
+
+	shared.edgeindices_cursor_per_layer = (_Atomic Index*)(shared.hashset_per_layer + depth);
+
+	for(uint i=0; i<depth; i++)
+		Atomic_store(shared.edgeindices_cursor_per_layer+i, 0, memory_order_relaxed);
+
+	shared.edgeindices_per_layer = (Index**)(shared.edgeindices_cursor_per_layer + depth);
+
+	size_t acc = 0;
+	for(uint i=0; i<depth; i++){
+		shared.edgeindices_per_layer[i] = (Index*)(shared.edgeindices_per_layer + depth) + acc;
+		acc = samples_per_node*(acc + PyArray_SIZE(init_layer));
+	}
+
+	GMSamplers_thread_pool->sync_handle->shared_data = (void*)(&shared);
+
+	Threadpool_wakeup_workers(GMSamplers_thread_pool);
+	Threadpool_participate_until_completion(GMSamplers_thread_pool);
+
+	PyList_SET_ITEM(samples_per_layer, depth, (PyObject*)init_layer);
+
+	HashSet_init(&hash_set);
+
+	Node* raw_nodes = PyArray_DATA(init_layer);
+
+	for(uint i=0; i<PyArray_SIZE(init_layer); i++)
+		HashSet_add_node(&hash_set, raw_nodes[i]);
+
+	HashSet hashset_swap;
+	HashSet_new(&hashset_swap, PyArray_SIZE(init_layer));
+	
+
+	for(uint i=0; i<depth; i++){
+		PyArrayObject* samples_numpy = MT_HashSet_Static_to_numpy(shared.hashset_per_layer+i);
+		Node* samples_raw = PyArray_DATA(samples_numpy);
+
+		HashSet_init(&hashset_swap);
+
+		for(uint ii=0; ii<PyArray_SIZE(samples_numpy); ii++){
+			HashSet_add_node(&hash_set, samples_raw[ii]);
+			HashSet_add_node(&hashset_swap, samples_raw[ii]);
+		}
+
+		PyList_SET_ITEM(samples_per_layer, depth-i-1, (PyObject*)samples_numpy);
+		PyList_SET_ITEM(edge_indices_between_layers, depth-i-1, (PyObject*)index_array_to_numpy(shared.edgeindices_per_layer[i], Atomic_load(shared.edgeindices_cursor_per_layer+i, memory_order_relaxed)));
+		PyList_SET_ITEM(load_per_layer, depth-i-1, (PyObject*)HashSet_to_numpy(&hash_set));
+
+		HashSet tmp = hashset_swap;
+		hashset_swap = hash_set;
+		hash_set = tmp;
+	}
+
+	for(uint i=0; i<depth; i++)
+		MT_HashSet_Static_free(shared.hashset_per_layer+i);
+	free(all_memory);
+	HashSet_free(&hash_set);
+	HashSet_free(&hashset_swap);
+
+	return PyTuple_Pack(3, samples_per_layer, edge_indices_between_layers, load_per_layer);
+}
 
 
 static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args){
@@ -898,7 +1202,6 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 
 		for(uint n = 0 ; n < prev_size; n++)
 			HashSet_add_node(&load_set, *raw_target_nodes++);
-
 
 		prev_layer = target_nodes;
 	}
@@ -1358,7 +1661,7 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 
 		
 
-		Index sum_pre_neighbor_count = sum_preneighbor_counts(prev_layer_nodes, PyArray_SIZE(prev_layer), graph->pre_neighbor_offsets);
+		Int sum_pre_neighbor_count = (Int)sum_preneighbor_counts(prev_layer_nodes, PyArray_SIZE(prev_layer), graph->pre_neighbor_offsets);
 
 		
 
@@ -1374,7 +1677,7 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 		// randomly sample edge index from sample_canvas and get the corresponding node sample from that index
 		// then we swap all edge indices to the front that have all the same src node like the node sample
 		// this fully connects the new node to every node in prev_layer if that edge exists in the graph 
-		Index cursor=0;
+		Int cursor=0;
 		while(cursor<sum_pre_neighbor_count){
 			Index rand_i = cursor + rand()%(sum_pre_neighbor_count-cursor);
 
@@ -1449,6 +1752,7 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 
 static PyMethodDef GMSamplersMethods[] = {
 	{"sample_nodewise", GMSamplers_sample_nodewise, METH_VARARGS, "Random sampling within a graph through multiple layers where each pre-neighborhood of a node in a layer gets sampled separately."},
+	{"sample_nodewise_mt_static", GMSamplers_sample_nodewise_mt_static, METH_VARARGS, "Random sampling within a graph through multiple layers where each pre-neighborhood of a node in a layer gets sampled separately. Multi-threaded with static lock-free Hashsets"},
 	{"sample_layerwise_fully_connected", GMSamplers_sample_layerwise_fully_connected, METH_VARARGS, "Random sampling within a graph through multiple layers where the pre-neighborhood of a layer gets sampled jointly and the layers are fully connected."},
 	
 	// TODO: figure out how to sample without collecting all edges in a list first
@@ -1486,13 +1790,13 @@ PyMODINIT_FUNC PyInit_csamplers(){
 	}
 
 	#ifdef Thread_Count_Arg
-	GMSamplers_thread_pool = (ThreadPool*)malloc(sizeof(ThreadPool) + sizeof(Queue) + sizeof(SynchronizationHandle));
+	GMSamplers_thread_pool = (Threadpool*)malloc(sizeof(Threadpool) + sizeof(Stack) + sizeof(SynchronizationHandle));
 
-	Queue* q = (Queue*)(GMSamplers_thread_pool+1);
+	Stack* q = (Stack*)(GMSamplers_thread_pool+1);
 
 	SynchronizationHandle* i = (SynchronizationHandle*)(q+1);
 
-	ThreadPool_init(GMSamplers_thread_pool, Thread_Count_Arg-1, i, q);
+	Threadpool_init(GMSamplers_thread_pool, Thread_Count_Arg-1, i, q);
 	#endif
 
 	return module;
