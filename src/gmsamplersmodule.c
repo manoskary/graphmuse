@@ -21,6 +21,9 @@ typedef uint64_t uint64;
 typedef int32_t Int;
 typedef uint32_t Node;
 typedef Node Index;
+
+#define PyLong_FromIndex PyLong_FromUnsignedLong
+
 typedef Node Key;
 typedef uint32_t Value;
 
@@ -688,15 +691,6 @@ static int Graph_init(Graph* graph, PyObject* args, PyObject* kwds){
 	return 0;
 }
 
-static PyObject* Graph_print(Graph* graph, PyObject *Py_UNUSED(ignored)){
-	for(Index i=0;i<graph->node_count+1;i++){
-		printf("%u\t", graph->pre_neighbor_offsets[i]);
-	}
-	printf("\n");
-
-	Py_RETURN_NONE;
-}
-
 static Node src_node_at(Graph* g, Index i){
 	return *((Node*)PyArray_GETPTR2(g->edge_list, 0, i));
 }
@@ -705,8 +699,36 @@ static Node dst_node_at(Graph* g, Index i){
 	return *((Node*)PyArray_GETPTR2(g->edge_list, 1, i));
 }
 
+static PyObject* Graph_print(Graph* graph, PyObject *Py_UNUSED(ignored)){
+	for(Index i=0;i<graph->node_count;i++){
+		Index c = graph->pre_neighbor_offsets[i+1]-graph->pre_neighbor_offsets[i];
+		Index o=graph->pre_neighbor_offsets[i];
+
+		for(Index ii=0; ii<c; ii++)
+			printf("(%u, %u), ", src_node_at(graph, o+ii), dst_node_at(graph, o+ii));
+	}
+	printf("\n");
+
+	Py_RETURN_NONE;
+}
+
+static PyObject* Graph_preneighborhood_count(Graph* graph, PyObject* args){
+	Node n;
+	if(!PyArg_ParseTuple(args, "I", &n)){
+		printf("If you don't provide proper arguments, you can't have any neighbor sampling.\nHow can you have any neighbor sampling if you don't provide proper arguments?\n");
+		return NULL;
+	}
+
+	Index pre_neighbor_count = graph->pre_neighbor_offsets[Node_To_Index(n)+1]-graph->pre_neighbor_offsets[Node_To_Index(n)];
+
+	return PyLong_FromIndex(pre_neighbor_count);
+}
+
+
+
 static PyMethodDef Graph_methods[] = {
 	{"print", (PyCFunction)Graph_print, METH_NOARGS, "print the graph"},
+	{"preneighborhood_count", (PyCFunction)Graph_preneighborhood_count, METH_VARARGS, "get the size of the pre-neighborhood of a node within the graph"},
 	{NULL}
 };
 
