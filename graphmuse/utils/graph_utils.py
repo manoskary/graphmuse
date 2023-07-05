@@ -2,6 +2,7 @@ from scipy import sparse as sp
 from scipy.sparse.linalg import eigs
 import torch
 import numpy as np
+import graphmuse.samplers as sam
 
 
 def degree(edge_index, num_nodes):
@@ -51,3 +52,12 @@ def positional_encoding(edge_index, num_nodes, pos_enc_dim: int) -> torch.Tensor
     EigVec = EigVec[:, EigVal.argsort()]
     pos_enc = torch.from_numpy(np.real(EigVec[:, 1:pos_enc_dim+1])).float()
     return pos_enc
+
+
+def edges_from_note_array(note_array, gtype="heterogeneous"):
+    edge_list, edge_types = sam.compute_edge_list(note_array['onset_div'].astype(np.int32),
+                                                  note_array['duration_div'].astype(np.int32))
+    if gtype == "heterogeneous":
+        # concatenate edge types to edge list
+        edge_list = np.concatenate((edge_list, edge_types.reshape(1, -1)), axis=0)
+    return edge_list
