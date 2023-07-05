@@ -1,4 +1,4 @@
-thread_count =  1
+thread_count = 23
 # cython: language_level=3
 import setuptools
 import os

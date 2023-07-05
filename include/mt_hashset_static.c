@@ -120,7 +120,7 @@ static Key MT_HashSet_Static_size(MT_HashSet_Static* hs){
 	return counter;
 }
 
-static void MT_HashSet_Static_copy(MT_HashSet_Static* hs, Key* dst){
+static void MT_HashSet_Static_copy(MT_HashSet_Static* hs, Key* dst, size_t dst_size){
 	Key counter = 0;
 	for(Key i=0; i<MT_HashSet_Static_capacity(hs); i++){
 		dst[counter]=Atomic_load(hs->keys+i, memory_order_relaxed);
@@ -129,5 +129,8 @@ static void MT_HashSet_Static_copy(MT_HashSet_Static* hs, Key* dst){
 			dst[counter]--;
 			counter++;
 		}
+
+		if(counter>=dst_size)
+			return;
 	}
 }

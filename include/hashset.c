@@ -187,12 +187,15 @@ static bool HashSet_add(HashSet* hash_set, Key k){
 	}
 }
 
-static void HashSet_copy(HashSet* hs, Key* dst){
+static void HashSet_copy(HashSet* hs, Key* dst, size_t dst_size){
 	Key counter = 0;
 	for(Key i=0; i<hs->capacity; i++){
 		dst[counter]=hs->keys[i];
 
 		counter += (Key)(hs->is_set[i]);
+
+		if(counter>=dst_size)
+			return;
 
 		if(counter == hs->size){
 			#ifndef GM_DEBUG_OFF

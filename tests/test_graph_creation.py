@@ -70,3 +70,4 @@ class TestGraphMuse(unittest.TestCase):
 
         self.assertTrue((edges_c==edges_python).all())
         
+        print("Edgle list creation assertions passed")
