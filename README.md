@@ -30,6 +30,10 @@ GraphMuse is built on top of PyTorch. Some additional dependencies are required 
 pip install graphmuse
 ```
 
+To install using the setup file do:
+```shell
+python setup.py build_ext -i
+```
 
 ## Usage
 
