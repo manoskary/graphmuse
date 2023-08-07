@@ -45,7 +45,7 @@ class TestSamplers(unittest.TestCase):
         assert(samples_per_layer[-1].shape == target.shape)
         assert((sorted(samples_per_layer[-1])==sorted(target)))
 
-        for l in range(depth):
+        for l in tqdm(range(depth)):
             # print("layer ",l)
             # print(samples_per_layer[l])
             # print(edges[:,numpy.sort(edge_indices_between_layers[l])])
