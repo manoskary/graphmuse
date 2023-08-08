@@ -1,7 +1,5 @@
 import numpy
-import dgl
 import graphmuse.samplers as gm_sampling
-import torch
 import time
 
 for i in range(2,10):
@@ -21,7 +19,7 @@ for i in range(2,10):
 
 	edges = numpy.array(edges).T
 
-	dgl_graph = dgl.graph((torch.from_numpy(edges[0].astype(numpy.int32)),torch.from_numpy(edges[0].astype(numpy.int32))))
+	#dgl_graph = dgl.graph((torch.from_numpy(edges[0].astype(numpy.int32)),torch.from_numpy(edges[0].astype(numpy.int32))))
 
 	gm_graph = gm_sampling.graph(edges)
 

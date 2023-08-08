@@ -1,4 +1,3 @@
-thread_count = 23
 # cython: language_level=3
 import setuptools
 import os
@@ -15,6 +14,8 @@ eca = ["-std=c11"]
 
 if os.name=='posix':
     eca.append("-DPOSIX")
+
+thread_count = cpu_count(logical=False)
 
 if thread_count>1:
     eca.append(f"-DThread_Count_Arg={thread_count}")
