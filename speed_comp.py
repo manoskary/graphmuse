@@ -2,7 +2,12 @@ import numpy
 import graphmuse.samplers as gm_sampling
 import time
 
+import psutil
+
 for i in range(2,10):
+	print("available cores: ", len(psutil.Process().cpu_affinity())//2)
+
+
 	N = 10**(i//2+1)
 
 	
