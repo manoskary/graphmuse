@@ -1,20 +1,40 @@
-import numpy
+import numpy as np
+
+
+class Sampler:
+	def __init__(self, graphs, subgraph_size, subgraphs, num_layers=None):
+		self.graphs = graphs
+		self.subgraph_size = subgraph_size
+		self.subgraphs = subgraphs
+		self.num_layers = num_layers # This is for a later version with node-wise sampling
+		self.onsets = {}
+		self.onset_count = {}
+
+	def prepare_data(self):
+		graph_sizes = np.array([g.num_nodes for g in self.graphs])
+		multiples = graph_sizes // self.subgraph_size + 1
+        # Create a list of indices repeating each graph the appropriate number of times
+        indices = np.concatenate([np.repeat(i, m) for i, m in enumerate(multiples)])
+
+
+
+
 
 
 def random_score_region(onsets, budget, check_possibility=True):
-	_, indices = numpy.unique(onsets,return_index=True)
+	_, indices = np.unique(onsets,return_index=True)
 
 	# in order to avoid handling the special case where a region is sampled that reaches to the end of 'onsets', we simply extend the possible values
-	indices = numpy.concatenate([indices,[len(onsets)]])
+	indices = np.concatenate([indices,[len(onsets)]])
 
 	if check_possibility:
-		if (numpy.diff(indices)>budget).all():
+		if (np.diff(indices)>budget).all():
 			raise ValueError("by including all notes with the same onset, the budget is always exceeded")
 
 	while True:
 		# since we added the last element ourselves and it isn't a valid index,
 		# we only sample excluding the last element
-		idx = numpy.random.choice(len(indices)-1)
+		idx = np.random.choice(len(indices)-1)
 
 		l = indices[idx]
 		
