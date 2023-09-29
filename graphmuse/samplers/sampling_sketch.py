@@ -1,64 +1,34 @@
 import numpy
 
 
-def random_subrange(onsets, budget, check_possibility=True):
+def random_score_region(onsets, budget, check_possibility=True):
+	_, indices = numpy.unique(onsets,return_index=True)
+
+	# in order to avoid handling the special case where a region is sampled that reaches to the end of 'onsets', we simply extend the possible values
+	indices = numpy.concatenate([indices,[len(onsets)]])
+
 	if check_possibility:
-		possible = False
-
-		eq_count = 1
-
-		cursor=0
-
-		while cursor + eq_count < len(onsets):
-			if onsets[cursor+eq_count]==onsets[cursor]:
-				eq_count+=1
-			elif eq_count<=budget:
-				possible = True
-				break
-			else:
-				cursor = cursor+eq_count
-				eq_count = 1
-
-		if not possible:
+		if (numpy.diff(indices)>budget).all():
 			raise ValueError("by including all notes with the same onset, the budget is always exceeded")
 
 	while True:
-		start_index = numpy.random.choice(len(onsets))
+		# since we added the last element ourselves and it isn't a valid index,
+		# we only sample excluding the last element
+		idx = numpy.random.choice(len(indices)-1)
 
-		l = start_index-1
+		l = indices[idx]
+		
+		for i in range(idx+1,len(indices)):
+			r = indices[i]
 
-		while l>=0 and onsets[l]==onsets[start_index]:
-			l-=1
-
-		l += 1
-
-		def g(onsets, start, budget):
-			cursor= start+1
-
-			while cursor < len(onsets) and onsets[start]==onsets[cursor]:
-				if cursor-start+1>budget:
-					return start
-
-				cursor+=1
-
-			return cursor
-
-		r = g(onsets, l, budget)
-
-
-
-		if r==l:
-			continue
-
-		while r<len(onsets):
-			rr = g(onsets, r, budget - (r-l))
-
-			if rr==r:
+			if r-l>budget:
+				r = indices[i-1]
 				break
 
-			r = rr
+		if l<r:
+			return (l,r)
 
-		return (l,r)
+		
 
 
 
@@ -72,8 +42,8 @@ class Graph:
 
 
 def musical_sampling(graphs, max_subgraph_size, subgraph_count, check_possibility=True):
-	subgraphs = []
-	
+	# we want to sample from the array 'graphs' proportional to the size of the graphs in the array
+	# so we need to pre-compute a probability distribution for that
 	graph_probs = numpy.empty(len(graphs))
 
 	total_size = 0
@@ -84,13 +54,16 @@ def musical_sampling(graphs, max_subgraph_size, subgraph_count, check_possibilit
 
 	graph_probs/=total_size
 
+	# main loop
+	subgraphs = []
+
 	for _ in range(subgraph_count):
 		g_idx = numpy.random.choice(len(graphs), p=graph_probs)
 
 		if graphs[g_idx].size()<=max_subgraph_size:
 			(l,r)=(0,graphs[g_idx].size())
 		else:
-			(l,r)=random_subrange(graphs[g_idx].note_array['onset_div'], max_subgraph_size, check_possibility)
+			(l,r)=random_score_region(graphs[g_idx].note_array['onset_div'], max_subgraph_size, check_possibility)
 			assert r-l<=max_subgraph_size
 
 		subgraphs.append((g_idx,(l,r)))
@@ -101,8 +74,8 @@ def musical_sampling(graphs, max_subgraph_size, subgraph_count, check_possibilit
 
 note_arrays = [sorted(numpy.random.randint(0,20,size=numpy.random.randint(1,20))) for _ in range(10)]
 
-for n in note_arrays:
-	print(n)
+for i,n in enumerate(note_arrays):
+	print(i,":",n)
 print("-------------------------------------------------")
 graphs = [Graph({'onset_div':n}) for n in note_arrays]
 
