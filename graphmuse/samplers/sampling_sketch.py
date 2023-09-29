@@ -31,24 +31,29 @@ def random_score_region(onsets, budget, check_possibility=True):
 		if (np.diff(indices)>budget).all():
 			raise ValueError("by including all notes with the same onset, the budget is always exceeded")
 
-	while True:
-		# since we added the last element ourselves and it isn't a valid index,
-		# we only sample excluding the last element
-		idx = np.random.choice(len(indices)-1)
+	# since we added the last element ourselves and it isn't a valid index,
+	# we only sample excluding the last element
+	# using a random permutation isn't necessarily, it just avoids sampling a previous sample
+	for idx in numpy.random.permutation(len(indices)-1):
+		samples_start = indices[idx]
 
-		l = indices[idx]
-		
-		for i in range(idx+1,len(indices)):
-			r = indices[i]
+		if samples_start+budget>=len(onsets):
+			return (samples_start,len(onsets))
 
-			if r-l>budget:
-				r = indices[i-1]
-				break
+		samples_end = samples_start+budget
 
-		if l<r:
-			return (l,r)
+		while samples_end-1>=samples_start and onsets[samples_end]==onsets[samples_end-1]:
+			samples_end-=1
 
-		
+		if samples_start<samples_end:
+			return (samples_start, samples_end)
+
+
+	if check_possibility:
+		assert False, "a result should be possible, according to the check above, however, no result exists."
+	else:
+		raise ValueError("by including all notes with the same onset, the budget is always exceeded")
+
 
 
 
@@ -102,4 +107,4 @@ graphs = [Graph({'onset_div':n}) for n in note_arrays]
 y=musical_sampling(graphs, 10, 7)
 
 for g_idx,(l,r) in y:
-	print(g_idx,":",l, r)
+	print(g_idx,":",l, r, note_arrays[g_idx][l:r])
