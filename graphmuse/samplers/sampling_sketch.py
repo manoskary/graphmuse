@@ -1,6 +1,36 @@
 import numpy
 
 
+
+
+
+
+def random_score_pre_neighbor(j, note_array):
+	while True:
+		i = numpy.random.randint(0,j,1)
+
+		if note_array['onset_div'][i] == note_array['onset_div'][j]:
+			return i
+
+		end_time_i = note_array['onset_div'][i]+note_array['duration_div'][i]
+
+		if end_time_i == note_array['onset_div'][j]:
+			return i
+
+		if end_time_i > note_array['onset_div'][j]:
+			return i
+
+		for k in range(i+1,j):
+			if note_array['onset_div'][k] == end_time_i:
+				break
+
+			if note_array['onset_div'][k] > end_time_i:
+				if note_array['onset_div'][k] == note_array['onset_div'][j]:
+					return i
+
+				break
+
+
 def random_score_region(onsets, budget, check_possibility=True):
 	_, indices = numpy.unique(onsets,return_index=True)
 
@@ -30,7 +60,7 @@ def random_score_region(onsets, budget, check_possibility=True):
 
 
 	if check_possibility:
-		assert False, "a result should be possible, according to the check above, however, no result exists."
+		assert False, "Impossible, something is wrong with the code"
 	else:
 		raise ValueError("by including all notes with the same onset, the budget is always exceeded")
 
@@ -66,12 +96,12 @@ def musical_sampling(graphs, max_subgraph_size, subgraph_count, check_possibilit
 		g_idx = numpy.random.choice(len(graphs), p=graph_probs)
 
 		if graphs[g_idx].size()<=max_subgraph_size:
-			(l,r)=(0,graphs[g_idx].size())
+			(samples_start,samples_end)=(0,graphs[g_idx].size())
 		else:
-			(l,r)=random_score_region(graphs[g_idx].note_array['onset_div'], max_subgraph_size, check_possibility)
-			assert r-l<=max_subgraph_size
+			(samples_start,samples_end)=random_score_region(graphs[g_idx].note_array['onset_div'], max_subgraph_size, check_possibility)
+			assert samples_end-samples_start<=max_subgraph_size
 
-		subgraphs.append((g_idx,(l,r)))
+		subgraphs.append((g_idx,(samples_start,samples_end)))
 
 	return subgraphs
 
