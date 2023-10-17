@@ -1,16 +1,17 @@
 static PyObject* random_score_region(PyObject* csamplers, PyObject* args){
 	PyArrayObject* np_onsets;
-	PyArrayObject* unique_onset_indices;
+	PyArrayObject* np_unique_onset_indices;
 	Index budget;
 
-	if(!PyArg_ParseTuple(args, "OOI", (PyObject**)&np_onsets, (PyObject**)&unique_onset_indices, (uint*)&budget)){
+	if(!PyArg_ParseTuple(args, "OOI", (PyObject**)&np_onsets, (PyObject**)&np_unique_onset_indices, (uint*)&budget)){
 		printf("If you don't provide proper arguments, you can't get a random score region.\nHow can you get a random score region if you don't provide proper arguments?\n");
 		return NULL;
 	}
 
 	int* onsets = (int*)PyArray_DATA(np_onsets);
+	Index* unique_onset_indices = (Index*)PyArray_DATA(np_unique_onset_indices);
 
-	Index perm_size = PyArray_SIZE(unique_onset_indices);
+	Index perm_size = PyArray_SIZE(np_unique_onset_indices);
 
 	Index* perm = (Index*)malloc(sizeof(Index)*perm_size);
 	for(Index i=0; i<perm_size; i++)
@@ -48,7 +49,8 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 	Graph* graph;
 	PyArrayObject* np_onsets;
 	PyArrayObject* np_endtimes_cummax;
-	Index region_start, region_end;
+	Index region_start;
+	Index region_end;
 	Index samples_per_node;
 
 	if(!PyArg_ParseTuple(args, "OOOIII", (PyObject**)&graph, (PyObject**)&np_onsets, (PyObject**)&np_endtimes_cummax, (uint*)&region_start, (uint*)&region_end, (uint*)&samples_per_node)){
@@ -66,8 +68,9 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 
 	Index edge_index_size = region_end-region_start;
 	Index* edge_index_canvas = (Index*)malloc(sizeof(Index)*edge_index_size);
-	Index edge_index_cursor = 0;
 	ASSERT(edge_index_canvas);
+	Index edge_index_cursor = 0;
+	
 
 	int* onsets = (int*)PyArray_DATA(np_onsets);
 	int* endtimes_cummax = (int*)PyArray_DATA(np_endtimes_cummax);
@@ -93,23 +96,29 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 		while(marker < pre_neighbor_count && Node_To_Index(src_node_at(graph, offset+marker)) < region_start)
 			marker++;
 
+		Index predict_cursor = edge_index_cursor + MACRO_MIN(marker, samples_per_node);
+
+		if(predict_cursor  >= edge_index_size){
+			Index new_size = (Index)(edge_index_size*1.5f);
+
+			while(predict_cursor>=new_size)
+				new_size = (Index)(new_size*1.5f);
+
+			Index* tmp = edge_index_canvas;
+			edge_index_canvas = (Index*)malloc(sizeof(Index)*new_size);
+
+			ASSERT(edge_index_canvas);
+
+			memcpy(edge_index_canvas, tmp, sizeof(Index)*edge_index_size);
+
+			free(tmp);
+			edge_index_size = new_size;
+		}
+
 		if(marker <= samples_per_node){
 			for(Index i=0; i<marker; i++){
 				Node pre_neighbor = src_node_at(graph, offset + i);
 				HashSet_add_node(&samples, pre_neighbor);
-
-				if(edge_index_cursor >= edge_index_size){
-					Index new_size = (Index)(edge_index_size*1.5f);
-					Index* tmp = edge_index_canvas;
-					edge_index_canvas = (Index*)malloc(sizeof(Index)*new_size);
-
-					ASSERT(edge_index_canvas);
-
-					memcpy(edge_index_canvas, tmp, sizeof(Index)*edge_index_size);
-
-					free(tmp);
-					edge_index_size = new_size;
-				}
 				edge_index_canvas[edge_index_cursor++] = offset + i;
 			}
 		}
@@ -137,7 +146,7 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 
 				HashSet_add_node(&samples, node_sample);
 
-				//edge_index_canvas[cursor++] = offset + perm[rand_i];
+				edge_index_canvas[edge_index_cursor++] = offset + perm[rand_i];
 
 				perm[rand_i]=perm[i];
 			}
@@ -162,10 +171,15 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 				HashSet_add_node(&samples, node_sample);
 				
 
-				//edge_index_canvas[cursor++] = offset + edge_index;
+				edge_index_canvas[edge_index_cursor++] = offset + edge_index;
 			}
 		}
 	}
 
-	return PyTuple_Pack(2, )
+	PyArrayObject* edge_indices = index_array_to_numpy(edge_index_canvas, edge_index_cursor);
+		
+
+	PyArrayObject* np_samples = HashSet_to_numpy(&samples);
+
+	return PyTuple_Pack(2, np_samples, edge_indices);
 }
