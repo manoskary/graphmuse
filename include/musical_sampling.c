@@ -17,7 +17,7 @@ static PyObject* random_score_region(PyObject* csamplers, PyObject* args){
 	for(Index i=0; i<perm_size; i++)
 		perm[i]=i;
 
-	Index region_start, region_end;
+	Index region_start=0, region_end=0;
 
 	for(Index i=0; i<perm_size; i++){
 		Index rand_i = i + rand()%(perm_size-i);
@@ -31,8 +31,9 @@ static PyObject* random_score_region(PyObject* csamplers, PyObject* args){
 
 		region_end = region_start+budget;
 
-		while(region_end-1>=region_start && onsets[region_end]==onsets[region_end-1])
+		while(region_end-1>=region_start && onsets[region_end]==onsets[region_end-1]){
 			region_end--;
+		}
 
 		if(region_start < region_end)
 			break;
@@ -42,12 +43,9 @@ static PyObject* random_score_region(PyObject* csamplers, PyObject* args){
 
 	free(perm);
 
-	return PyTuple_Pack(2, region_start, region_end);
+	return PyTuple_Pack(2, PyLong_FromIndex(region_start), PyLong_FromIndex(region_end));
 }
 
-static void add_node_samples(Index marker, Index samples_per_node, Index offset, Graph* graph, HashSet* samples, HashSet* node_tracker){
-	
-}
 
 static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, PyObject* args){
 	Graph* graph;
@@ -62,7 +60,6 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 		printf("If you don't provide proper arguments, you can't extend a score region via neighbor sampling.\nHow can you extend a score region via neighbor sampling if you don't provide proper arguments?\n");
 		return NULL;
 	}
-
 
 	HashSet samples, node_tracker;
 	HashSet_new(&samples, region_end-region_start);
@@ -183,7 +180,7 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 	}
 
 	if(region_end<=PyArray_SIZE(np_onsets)-1){
-		for(Int i=region_end-1; j>=region_start; j--){
+		for(Int i=region_end-1; i>=region_start; i--){
 			if(endtimes_cummax[i] <= onsets[region_end-1])
 				break;
 
@@ -192,12 +189,12 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 			while(marker < PyArray_SIZE(np_onsets) && onsets[marker] <= onsets[i]+durations[i])
 				marker++;
 
-			if(marker < PyArray_SIZE(np_onsets) && onsets[marker-1] < onsets[i]+durations[i])
+			if(((marker < PyArray_SIZE(np_onsets)) & (marker >= 1)) && onsets[marker-1] < onsets[i]+durations[i])
 				marker++;
 
 			if(marker-region_end <= samples_per_node){
 				for(Node j=region_end; j<marker; j++){
-					HashSet_add_node(samples, j);
+					HashSet_add_node(&samples, j);
 					//edge_index_canvas[edge_index_cursor++] = offset + i;
 				}
 			}
@@ -254,5 +251,5 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 
 	PyArrayObject* np_samples = HashSet_to_numpy(&samples);
 
-	return np_samples;//PyTuple_Pack(2, np_samples, edge_indices);
+	return (PyObject*)np_samples;//PyTuple_Pack(2, np_samples, edge_indices);
 }
