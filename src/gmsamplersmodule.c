@@ -41,10 +41,34 @@ typedef uint8_t EdgeType;
 #define Node_To_Index(n) (n)
 #define Index_To_Node(i) (i)
 
+static uint64 power(uint32 base, uint32 exponent){
+	uint64 p = 1;
+
+	while(exponent--)
+		p*=base;
+
+	return p;
+}
+
 
 static PyArrayObject* new_node_numpy(Index size){
 	const npy_intp dims = (npy_intp)size;
 	return (PyArrayObject*)PyArray_SimpleNew(1, &dims, Node_Eqv_In_Numpy);
+}
+
+static PyArrayObject* numpy_edge_list(Node* edge_list, Index edge_list_size){
+	const npy_intp dims[2] = {2,edge_list_size};
+
+	const npy_intp strides[2] = {sizeof(Node), 2*sizeof(Node)};
+
+	PyTypeObject* subtype = &PyArray_Type;
+
+	PyArrayObject* result = (PyArrayObject*)PyArray_New(subtype, 2, dims, Node_Eqv_In_Numpy, strides, NULL, 0, NPY_ARRAY_C_CONTIGUOUS, NULL);
+
+	if(edge_list_size > 0)
+		memcpy(PyArray_DATA(result), edge_list, 2*sizeof(Node)*edge_list_size);
+
+	return result;
 }
 
 
@@ -626,8 +650,9 @@ static PyArrayObject* index_array_to_numpy(Index* indices, uint size){
 
 	Index* np_indices = (Index*)PyArray_DATA(np_arr);
 
-	while(size--)
-		*np_indices++ = *indices++;
+	memcpy(np_indices, indices, sizeof(Index)*size);
+	// while(size--)
+	// 	*np_indices++ = *indices++;
 
 	return np_arr;
 }
@@ -641,14 +666,7 @@ static PyArrayObject* index_array_to_numpy(Index* indices, uint size){
 
 
 
-static uint64 power(uint32 base, uint32 exponent){
-	uint64 p = 1;
 
-	while(exponent--)
-		p*=base;
-
-	return p;
-}
 
 
 
@@ -1740,6 +1758,7 @@ static PyMethodDef GMSamplersMethods[] = {
 	{"compute_edge_list", GMSamplers_compute_edge_list, METH_VARARGS, "Compute edge list from onset_div and duration_div."},
 	{"c_random_score_region", random_score_region, METH_VARARGS, "Samples a random region (integer interval) from a score graph"},
 	{"c_extend_score_region_via_neighbor_sampling", extend_score_region_via_neighbor_sampling, METH_VARARGS, "Given a score region, add samples from outside the region aquired via neighboorhood sampling"},
+	{"c_sample_neighbors_in_score_graph", sample_neighbors_in_score_graph, METH_VARARGS, "nodewise sampling of neighbors without pre-computed lookup table"},
 	{NULL, NULL, 0, NULL}
 };
 

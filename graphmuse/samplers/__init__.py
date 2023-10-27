@@ -38,3 +38,11 @@ def extend_score_region_via_neighbor_sampling(graph, note_array, region, samples
 	endtimes_cummax = numpy.maximum.accumulate(onsets+durations)
 
 	return c_extend_score_region_via_neighbor_sampling(graph,onsets, durations, endtimes_cummax, region_start, region_end, samples_per_node)
+
+def sample_neighbors_in_score_graph(note_array, depth, samples_per_node, targets):
+	assert len(targets)>0
+
+	onsets = note_array["onset_div"].astype(numpy.int32)
+	durations = note_array["duration_div"].astype(numpy.int32)
+
+	return c_sample_neighbors_in_score_graph(onsets, durations, depth, samples_per_node, targets)

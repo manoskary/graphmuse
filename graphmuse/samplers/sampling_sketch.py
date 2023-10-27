@@ -1,6 +1,7 @@
 import numpy as np
 from torch.utils.data import DataLoader, Sampler
 import torch
+import graphmuse.samplers as csamplers
 
 
 class SubgraphCreationSampler(Sampler):
@@ -63,11 +64,14 @@ class SubgraphCreationSampler(Sampler):
 
 
 class MuseDataloader(DataLoader):
-	def __init__(self, graphs, subgraph_size, subgraphs, num_layers=None, batch_size=1, num_workers=0):
+	def __init__(self, graphs, subgraph_size, subgraphs, num_layers=0, samples_per_node=0, batch_size=1, num_workers=0):
 		self.graphs = graphs
+		gp = numpy.array([g.node_count() for g in graphs])
+		self.graph_probabilities = gp/numpy.sum(gp)
 		self.subgraph_size = subgraph_size
 		self.subgraphs = subgraphs
 		self.num_layers = num_layers # This is for a later version with node-wise sampling
+		self.samples_per_node = samples_per_node
 		self.onsets = {}
 		self.onset_count = {}
 		batch_sampler = SubgraphCreationSampler(self, max_subgraph_size=subgraph_size, drop_last=False, batch_size=batch_size)
@@ -82,62 +86,32 @@ class MuseDataloader(DataLoader):
 		"""
 		Sample subgraphs from a list of graphs.
 		"""
-		return
 
-	def random_score_region(self, graph_idx, check_possibility=True):
-		if graph_idx in self.onsets.keys():
-			onsets = self.onsets[graph_idx]
-			onset_count = self.onset_count[graph_idx]
-		else:
-			onsets = self.graphs.note_array['onset_div'].astype(np.int32)
-			uniques, onset_count = np.unique(onsets, return_counts=True)
-			self.onsets[graph_idx] = onsets
-			self.onset_count[graph_idx] = onset_count
+		subgraph_samples = []
 
-		# in order to avoid handling the special case where a region is sampled that reaches to the end of 'onsets', we simply extend the possible values
-		indices = np.concatenate([self.subgraph_size,[len(onsets)]])
+		for _ in range(self.subgraphs):
+			random_graph = np.choice(self.graphs, p=self.graph_probabilities)
 
-		if check_possibility:
-			if (np.diff(indices)>self.subgraph_size).all():
-				raise ValueError("by including all notes with the same onset, the budget is always exceeded")
+			region = csamplers.random_score_region(random_graph.note_array, self.subgraph_size)
 
-		# since we added the last element ourselves and it isn't a valid index,
-		# we only sample excluding the last element
-		# using a random permutation isn't necessarily, it just avoids sampling a previous sample
-		for idx in np.random.permutation(len(indices)-1):
-			samples_start = indices[idx]
+			(left_extension, left_edges), (right_ext, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(random_graph.c_graph, random_graph.note_array, region, self.samples_per_node)
 
-			if samples_start+self.subgraph_size>=len(onsets):
-				return (samples_start,len(onsets))
-
-			samples_end = samples_start+self.subgraph_size
-
-			while samples_end-1>=samples_start and onsets[samples_end]==onsets[samples_end-1]:
-				samples_end-=1
-
-			if samples_start<samples_end:
-				return (samples_start, samples_end)
+			left_layers, edge_indices_between_left_layers, _ = csamplers.sample_nodewise(random_graph.c_graph, self.num_layers-2, self.samples_per_node, left_extension)
+			
+			edges_between_left_layers = [random_graph.edges[idx] for idx in edge_indices_between_left_layers]
 
 
-		if check_possibility:
-			assert False, "a result should be possible, according to the check above, however, no result exists."
-		else:
-			raise ValueError("by including all notes with the same onset, the budget is always exceeded")
+			right_layers, edges_between_right_layers = csamplers.sample_neighbors_in_score_graph(random_graph.note_array, self.num_layers-2, self.samples_per_node, right_extension)
+			
+			layers=[numpy.arange(region[0], region[1])]
 
-	def musical_sampling(self, g_idxs, check_possibility=True):
-		# we want to sample from the array 'graphs' proportional to the size of the graphs in the array
-		# so we need to pre-compute a probability distribution for that
-		graphs = [self.graphs[i] for i in g_idxs]
-		subgraphs = []
-		for i,g in enumerate(graphs):
+			layers.extend([np.concatenate([l,r]) for l,r in zip(left_layers, right_layers)])
 
-			if g.size() <= self.subgraph_size:
-				(l, r) = (0, g.size())
-			else:
-				(l, r) = self.random_score_region(g_idxs[i], check_possibility)
-				assert r - l <= self.subgraph_size
+			edges_between_layers = [np.concatenate([left_edges, right_edges])]
+			edges_between_layers.extend([np.concatenate([l,r]) for l,r in zip(edges_between_left_layers, edge_indices_between_right_layers)])
 
-			subgraphs.append((g_idxs[i], (l, r)))
+			subgraph_samples.append((layers, edges_between_layers))
 
-		return subgraphs
+
+		return subgraph_samples
 

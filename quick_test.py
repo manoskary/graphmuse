@@ -64,4 +64,24 @@ region = sam.random_score_region(note_array, 100)
 
 print(region)
 
-print(sam.extend_score_region_via_neighbor_sampling(g, note_array, region, 2))
+(left_ext, left_edges), (right_ext, right_edges) = sam.extend_score_region_via_neighbor_sampling(g, note_array, region, 2)
+
+
+print(left_ext)
+print()
+print(left_edges)
+print("\n----------------------\n")
+print(right_ext)
+print()
+print(right_edges)
+print("\n----------------------\n")
+
+
+
+
+
+right_right_ext, right_right_edges = sam.sample_neighbors_in_score_graph(note_array, 1, 3, right_ext)
+
+print(right_right_ext)
+print()
+print(right_right_edges)
