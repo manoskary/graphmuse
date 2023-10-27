@@ -54,6 +54,9 @@ class HeteroScoreGraph(object):
         self.name = name
         self.y = labels if labels is None else torch.from_numpy(labels)
 
+    def node_count(self):
+        return len(self.note_array)
+
     def adj(self, weighted=False):
         if weighted:
             return torch.sparse_coo_tensor(self.edge_index, self.edge_weights, (len(self.x), len(self.x)))
