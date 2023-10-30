@@ -2,6 +2,8 @@ import numpy as np
 from torch.utils.data import DataLoader, Sampler
 import torch
 import graphmuse.samplers as csamplers
+from graphmuse.utils.graph import HeteroScoreGraph
+from typing import List
 
 
 class SubgraphCreationSampler(Sampler):
@@ -9,6 +11,21 @@ class SubgraphCreationSampler(Sampler):
     This sampler takes as input a graph dataset and creates subgraphs of a given size.
     It creates a different number of subgraphs based on the size of the original graph and the max subgraph size.
     It is used in the ASAPGraphDataset class.
+
+    Parameters
+    ----------
+    data_source : list of HeteroScoreGraph
+        The graph dataset.
+    max_subgraph_size : int
+        The maximum size of the subgraphs.
+    drop_last : bool
+        Whether to drop the last batch if it is smaller than the batch size.
+    batch_size : int
+        The batch size.
+    train_idx : list of int
+        The indices of the training graphs.
+    subgraphs_per_max_size : int
+        The number of subgraphs to create for each max size.
     """
     def __init__(self, data_source, max_subgraph_size=100, drop_last=False, batch_size=64, train_idx=None, subgraphs_per_max_size:int=5):
         self.data_source = data_source
@@ -64,54 +81,69 @@ class SubgraphCreationSampler(Sampler):
 
 
 class MuseDataloader(DataLoader):
-	def __init__(self, graphs, subgraph_size, subgraphs, num_layers=0, samples_per_node=0, batch_size=1, num_workers=0):
-		self.graphs = graphs
-		gp = numpy.array([g.node_count() for g in graphs])
-		self.graph_probabilities = gp/numpy.sum(gp)
-		self.subgraph_size = subgraph_size
-		self.subgraphs = subgraphs
-		self.num_layers = num_layers # This is for a later version with node-wise sampling
-		self.samples_per_node = samples_per_node
-		self.onsets = {}
-		self.onset_count = {}
-		batch_sampler = SubgraphCreationSampler(self, max_subgraph_size=subgraph_size, drop_last=False, batch_size=batch_size)
-		super().__init__(batch_sampler=batch_sampler, batch_size=1, collate_fn=self.collate_fn, num_workers=num_workers)
+    """
+    This dataloader takes as input a list of graphs and creates subgraphs of a given size.
+    It creates a different number of subgraphs based on the size of the original graph and the max subgraph size.
 
-	def collate_fn(self, batch):
-		graphlist = self.graphs[batch]
-		out = self.sample_from_graphlist(graphlist, self.subgraph_size, self.subgraphs, self.num_layers)
-		return out
+    Parameters
+    ----------
+    graphs : list of HeteroScoreGraph
+        The graph dataset.
+    subgraph_size : int
+        The maximum size of the subgraphs.
+    subgraphs : int
+        The number of subgraphs per batch. Maybe it is redundant and it is covered by the batch size.
+    num_layers : int
+        The number of layers to sample.
+    samples_per_node : int
+        The number of samples per node.
+    batch_size : int
+        The batch size.
+    num_workers : int
+        The number of workers.
+    """
+    def __init__(self, graphs, subgraph_size, subgraphs, num_layers=0, samples_per_node=0, batch_size=1, num_workers=0):
+        self.graphs = graphs
+        self.subgraph_size = subgraph_size
+        self.subgraphs = subgraphs
+        self.num_layers = num_layers # This is for a later version with node-wise sampling
+        self.samples_per_node = samples_per_node
+        self.onsets = {}
+        self.onset_count = {}
+        batch_sampler = SubgraphCreationSampler(self, max_subgraph_size=subgraph_size, drop_last=False, batch_size=batch_size)
+        super().__init__(batch_sampler=batch_sampler, batch_size=1, collate_fn=self.collate_fn, num_workers=num_workers)
 
-	def sample_from_graphlist(self, graphlist, subgraph_size, subgraphs, num_layers=None):
-		"""
-		Sample subgraphs from a list of graphs.
-		"""
+    def collate_fn(self, batch):
+        graphlist = self.graphs[batch]
+        out = self.sample_from_graphlist(graphlist, self.subgraph_size, self.subgraphs, self.num_layers)
+        return out
 
-		subgraph_samples = []
+    def sample_from_graphlist(self, graphlist, subgraph_size, subgraphs, num_layers=None):
+        """
+        Sample subgraphs from a list of graphs.
+        This method samples a subgraph from each graph in the list.
+        """
+        subgraph_samples = []
 
-		for _ in range(self.subgraphs):
-			random_graph = np.choice(self.graphs, p=self.graph_probabilities)
+        # Given a list of graphs, sample a subgraph from each graph of size at most subgraph_size
+        for random_graph in graphlist:
 
-			region = csamplers.random_score_region(random_graph.note_array, self.subgraph_size)
+            region = csamplers.random_score_region(random_graph.note_array, self.subgraph_size)
 
-			(left_extension, left_edges), (right_ext, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(random_graph.c_graph, random_graph.note_array, region, self.samples_per_node)
+            (left_extension, left_edges), (right_extension, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(random_graph.c_graph, random_graph.note_array, region, self.samples_per_node)
 
-			left_layers, edge_indices_between_left_layers, _ = csamplers.sample_nodewise(random_graph.c_graph, self.num_layers-2, self.samples_per_node, left_extension)
-			
-			edges_between_left_layers = [random_graph.edges[idx] for idx in edge_indices_between_left_layers]
+            # Sample the leftmost layers but why only leftmost?
+            left_layers, edge_indices_between_left_layers, _ = csamplers.sample_nodewise(random_graph.c_graph, self.num_layers-2, self.samples_per_node, left_extension)
+            # Use edge_indices to retrieve the edges between the leftmost layers
+            edges_between_left_layers = random_graph.edge_index[edge_indices_between_left_layers]
 
+            # I don't understand what is happening here. Why is the right extension used separately?
+            right_layers, edge_indices_between_right_layers = csamplers.sample_neighbors_in_score_graph(random_graph.note_array, self.num_layers-2, self.samples_per_node, right_extension)
+            edges_between_right_layers = random_graph.edge_index[edge_indices_between_right_layers]
 
-			right_layers, edges_between_right_layers = csamplers.sample_neighbors_in_score_graph(random_graph.note_array, self.num_layers-2, self.samples_per_node, right_extension)
-			
-			layers=[numpy.arange(region[0], region[1])]
+            edges_between_layers = torch.cat((left_edges, right_edges, edges_between_right_layers, edges_between_left_layers), dim=1)
+            layers = torch.cat((torch.arange(region[0], region[1]), left_layers, right_layers))
+            subgraph_samples.append((layers, edges_between_layers))
 
-			layers.extend([np.concatenate([l,r]) for l,r in zip(left_layers, right_layers)])
-
-			edges_between_layers = [np.concatenate([left_edges, right_edges])]
-			edges_between_layers.extend([np.concatenate([l,r]) for l,r in zip(edges_between_left_layers, edge_indices_between_right_layers)])
-
-			subgraph_samples.append((layers, edges_between_layers))
-
-
-		return subgraph_samples
+        return subgraph_samples
 
