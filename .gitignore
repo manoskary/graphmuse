@@ -132,3 +132,10 @@ dmypy.json
 
 # Pycharm
 .idea/
+
+# VSCode
+.vscode/
+*.obj
+*.exp
+*.lib
+
