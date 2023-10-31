@@ -130,7 +130,8 @@ class MuseDataloader(DataLoader):
 
             region = csamplers.random_score_region(random_graph.note_array, self.subgraph_size)
 
-            (left_extension, left_edges), (right_extension, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(random_graph.c_graph, random_graph.note_array, region, self.samples_per_node)
+            (left_extension, left_edges), (right_extension, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(
+                random_graph.c_graph, random_graph.note_array, region, self.samples_per_node)
 
             # Sample the leftmost layers but why only leftmost?
             left_layers, edge_indices_between_left_layers, _ = csamplers.sample_nodewise(random_graph.c_graph, self.num_layers-2, self.samples_per_node, left_extension)

@@ -1,6 +1,4 @@
 import graphmuse.samplers as sam
-
-from tqdm import tqdm
 import os
 import partitura as pt
 import numpy as np    
@@ -55,8 +53,6 @@ for i in range(len(uniq_indices)-1):
     edge_list[0,uniq_indices[i]:uniq_indices[i+1]].sort()
 
 edge_list[0, uniq_indices[-1]:].sort()
-
-#print((edge_list[1][:-1]<=edge_list[1][1:]).all())
 
 g = sam.graph(edge_list)
 

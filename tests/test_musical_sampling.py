@@ -1,11 +1,12 @@
 from graphmuse.samplers.sampling_sketch import MuseDataloader
 from graphmuse.utils.graph import edges_from_note_array, HeteroScoreGraph
 import numpy as np
+from graphmuse.samplers import compute_edge_list
 
 
 num_graphs = 10
-max_nodes = 5000
-min_nodes = 500
+max_nodes = 500
+min_nodes = 100
 max_dur = 20
 min_dur = 1
 subgraph_size = 100
@@ -27,13 +28,16 @@ for i in range(num_graphs):
     note_array = np.core.records.fromarrays(note_array, names='onset_div,duration_div,pitch')
     # sort by onset and then by pitch
     note_array = np.sort(note_array, order=['onset_div', 'pitch'])
-    edges = edges_from_note_array(note_array)
+    edges, edge_types = compute_edge_list(note_array['onset_div'].astype(np.int32), note_array['duration_div'].astype(np.int32))
     # sort edges
-    edges = edges[:, edges[0].argsort()]
+    resort_idx = np.lexsort((edges[1], edges[0]))
+    edges = edges[:, resort_idx]
+    edge_types = edge_types[resort_idx]
     # create features
     features = np.random.rand(note_array.shape[0], 10)
     # create graph
-    graph = HeteroScoreGraph(features, edges, note_array=note_array)
+    new_edges = np.vstack((edges, edge_types))
+    graph = HeteroScoreGraph(features, new_edges, note_array=note_array)
     graphs.append(graph)
 
 # create dataloader
