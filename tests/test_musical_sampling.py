@@ -3,7 +3,7 @@ from graphmuse.utils.graph import edges_from_note_array, HeteroScoreGraph
 import numpy as np
 
 
-num_graphs = 100
+num_graphs = 10
 max_nodes = 5000
 min_nodes = 500
 max_dur = 20
@@ -37,7 +37,7 @@ for i in range(num_graphs):
     graphs.append(graph)
 
 # create dataloader
-dataloader = MuseDataloader(graphs, subgraph_size=100, subgraphs=10, batch_size=1, num_workers=0)
+dataloader = MuseDataloader(graphs, subgraph_size=100, subgraphs=4, batch_size=1, num_workers=1)
 # iterate over dataloader
 batch = next(iter(dataloader))
 

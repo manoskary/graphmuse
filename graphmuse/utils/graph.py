@@ -8,6 +8,7 @@ import string
 import pickle
 from .general import MapDict
 import warnings
+import graphmuse.samplers as csamplers
 
 
 class HeteroScoreGraph(object):
@@ -49,6 +50,7 @@ class HeteroScoreGraph(object):
         self.note_array = note_array
         self.edge_type = torch.from_numpy(edges[-1]).long()
         self.edge_index = torch.from_numpy(edges[:2]).long()
+        self.c_graph = csamplers.graph(edges.astype(np.uint32))
         self.edge_weights = torch.ones(len(self.edge_index[0])) if edge_weights is None else torch.from_numpy(
             edge_weights)
         self.name = name

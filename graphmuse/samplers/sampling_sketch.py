@@ -3,7 +3,6 @@ from torch.utils.data import DataLoader, Sampler
 import torch
 import graphmuse.samplers as csamplers
 from graphmuse.utils.graph import HeteroScoreGraph
-from typing import List
 
 
 class SubgraphCreationSampler(Sampler):
@@ -27,13 +26,13 @@ class SubgraphCreationSampler(Sampler):
     subgraphs_per_max_size : int
         The number of subgraphs to create for each max size.
     """
-    def __init__(self, data_source, max_subgraph_size=100, drop_last=False, batch_size=64, train_idx=None, subgraphs_per_max_size:int=5):
-        self.data_source = data_source
+    def __init__(self, graphs, max_subgraph_size=100, drop_last=False, batch_size=64, train_idx=None, subgraphs_per_max_size:int=5):
+        self.data_source = graphs
         bucket_boundaries = [2*max_subgraph_size, 5*max_subgraph_size, 10*max_subgraph_size, 20*max_subgraph_size]
         self.sampling_sizes = np.array([2, 4, 10, 20, 40])*subgraphs_per_max_size
         ind_n_len = []
-        train_idx = train_idx if train_idx is not None else list()
-        for i, g in enumerate(data_source.graphs):
+        train_idx = train_idx if train_idx is not None else range(len(graphs))
+        for i, g in enumerate(graphs):
             if i in train_idx:
                 ind_n_len.append((i, g.x.shape[0]))
         self.ind_n_len = ind_n_len
@@ -102,7 +101,7 @@ class MuseDataloader(DataLoader):
     num_workers : int
         The number of workers.
     """
-    def __init__(self, graphs, subgraph_size, subgraphs, num_layers=0, samples_per_node=0, batch_size=1, num_workers=0):
+    def __init__(self, graphs, subgraph_size, subgraphs, num_layers=0, samples_per_node=3, batch_size=1, num_workers=0):
         self.graphs = graphs
         self.subgraph_size = subgraph_size
         self.subgraphs = subgraphs
@@ -110,10 +109,11 @@ class MuseDataloader(DataLoader):
         self.samples_per_node = samples_per_node
         self.onsets = {}
         self.onset_count = {}
-        batch_sampler = SubgraphCreationSampler(self, max_subgraph_size=subgraph_size, drop_last=False, batch_size=batch_size)
-        super().__init__(batch_sampler=batch_sampler, batch_size=1, collate_fn=self.collate_fn, num_workers=num_workers)
+        dataset = range(len(graphs))
+        batch_sampler = SubgraphCreationSampler(graphs, max_subgraph_size=subgraph_size, drop_last=False, batch_size=batch_size)
+        super().__init__(self, batch_sampler=batch_sampler, num_workers=num_workers, collate_fn=self.collate_graph_fn)
 
-    def collate_fn(self, batch):
+    def collate_graph_fn(self, batch):
         graphlist = self.graphs[batch]
         out = self.sample_from_graphlist(graphlist, self.subgraph_size, self.subgraphs, self.num_layers)
         return out
@@ -146,4 +146,7 @@ class MuseDataloader(DataLoader):
             subgraph_samples.append((layers, edges_between_layers))
 
         return subgraph_samples
+
+    def __getitem__(self, idx):
+        return self.sample_from_graphlist([self.graphs[idx]], self.subgraph_size, self.subgraphs, self.num_layers)
 
