@@ -1,6 +1,6 @@
 # cython: language_level=3
 import setuptools
-import os
+import os, sys
 import numpy
 from Cython.Build import cythonize
 from psutil import cpu_count
@@ -10,10 +10,13 @@ graph = [os.path.join(dirname, "graphmuse", "utils", x) for x in ["cython_graph.
 # module = setuptools.Extension('graph', sources=[graph])
 # module = cythonize(graph)
 
-eca = ["-std=c11"]
+
 
 if os.name=='posix':
+    eca = ["-std=c11"]
     eca.append("-DPOSIX")
+elif sys.platform.startswith('win'):
+    eca = ["/std:c11"]
 
 thread_count = cpu_count(logical=False)
 
