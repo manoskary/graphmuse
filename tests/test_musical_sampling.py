@@ -3,10 +3,13 @@ from graphmuse.utils.graph import edges_from_note_array, HeteroScoreGraph
 import numpy as np
 from graphmuse.samplers import compute_edge_list
 
+import sys
+from tqdm import tqdm
 
-num_graphs = 10
-max_nodes = 500
-min_nodes = 100
+
+num_graphs = 1
+max_nodes = 50
+min_nodes = 10
 max_dur = 20
 min_dur = 1
 subgraph_size = 100
@@ -19,6 +22,8 @@ for i in range(num_graphs):
     ons = np.cumsum(np.concatenate((np.zeros((4, 1)), dur), axis=1), axis=1)[:,:-1]
     dur = dur.flatten()
     ons = ons.flatten()
+
+    
     pitch = np.row_stack((np.random.randint(70, 80, size=(1, l)),
                           np.random.randint(50, 60, size=(1, l)),
                           np.random.randint(60, 70, size=(1, l)),
@@ -29,9 +34,17 @@ for i in range(num_graphs):
     # sort by onset and then by pitch
     note_array = np.sort(note_array, order=['onset_div', 'pitch'])
     edges, edge_types = compute_edge_list(note_array['onset_div'].astype(np.int32), note_array['duration_div'].astype(np.int32))
+
+    
+
+
+    
+
     # sort edges
-    resort_idx = np.lexsort((edges[1], edges[0]))
+    resort_idx = np.lexsort((edges[0], edges[1]))
     edges = edges[:, resort_idx]
+
+
     edge_types = edge_types[resort_idx]
     # create features
     features = np.random.rand(note_array.shape[0], 10)

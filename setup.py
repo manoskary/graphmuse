@@ -16,12 +16,13 @@ if os.name=='posix':
     eca = ["-std=c11"]
     eca.append("-DPOSIX")
 elif sys.platform.startswith('win'):
-    eca = ["/std:c11"]
+    eca = ["-DWindows"]
+
 
 thread_count = cpu_count(logical=False)
 
-if thread_count>1:
-    eca.append(f"-DThread_Count_Arg={thread_count}")
+# if thread_count>1:
+#     eca.append(f"-DThread_Count_Arg={thread_count}")
 
 ext_modules = [
     setuptools.Extension(
@@ -51,6 +52,6 @@ setuptools.setup(
     include_dirs=[os.path.join(numpy.get_include(),"numpy"), "include", "../miniconda3/include/libxml2/libxml"],
     # ext_modules=[module],
     ext_modules= ext_modules,
-    author='Emmanouil Karystinaios',
-    maintainer='Emmanouil Karystinaios'
+    author='Emmanouil Karystinaios, Nimrod Varga',
+    maintainer='Emmanouil Karystinaios, Nimrod Varga'
 )

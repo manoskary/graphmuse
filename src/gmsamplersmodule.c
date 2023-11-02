@@ -25,9 +25,9 @@ typedef Node Index;
 #define PyLong_FromIndex PyLong_FromUnsignedLong
 
 typedef Node Key;
-typedef uint32_t Value;
+typedef uint64_t Value;
 
-#define Node_Eqv_In_Numpy NPY_UINT32
+#define Node_Eqv_In_Numpy NPY_INT32
 #define Index_Eqv_In_Numpy Node_Eqv_In_Numpy
 #define Key_Eqv_In_Numpy Node_Eqv_In_Numpy
 #define EType_Eqv_In_Numpy NPY_UINT8
@@ -395,13 +395,19 @@ static void neighbor_counts_to_offsets(Index node_count, Index* neighbor_counts)
 //	(neighbor_offsets[to]-neighbor_offsets[from] > cacheline_size/sizeof(Node)) isn't necessarily always true for fill_in_neighbors
 
 
+static void write_node_numpy2(PyArrayObject* np_array, Index i, Index j, Node n){
+	Node* n_mem = (Node*)PyArray_GETPTR2(np_array, i, j);
+	*n_mem = n;
+}
+
+
 // See comment for count_neighbors for an explanation of the seemingly complicated nature of the iteration
 static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArrayObject* edge_list, PyArrayObject* edge_types, Index from, Index to, int* onset_div, int* duration_div){
 	for(Index i=from; i<to; i++){
 		Index neighbor_count = neighbor_offsets[i+1] - neighbor_offsets[i];
 
-		Node* src = (Node*)PyArray_GETPTR2(edge_list, 0, neighbor_offsets[i]);
-		Node* dst = (Node*)PyArray_GETPTR2(edge_list, 1, neighbor_offsets[i]);
+		// Node* src = (Node*)PyArray_GETPTR2(edge_list, 0, neighbor_offsets[i]);
+		// Node* dst = (Node*)PyArray_GETPTR2(edge_list, 1, neighbor_offsets[i]);
 		EdgeType* types = (EdgeType*)PyArray_DATA(edge_types) + neighbor_offsets[i];
 
 		Int eq_boundary = ((Int)i)-1;
@@ -418,8 +424,11 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 				cond1 = (onset_div[j] == onset_div[i]),
 				cond3 = (onset_div[j] == onset_div[i] + duration_div[i]);
 
-			src[cursor] = Index_To_Node(i);
-			dst[cursor] = Index_To_Node(j);
+			write_node_numpy2(edge_list, 0, neighbor_offsets[i]+cursor, Index_To_Node(i));
+			write_node_numpy2(edge_list, 1, neighbor_offsets[i]+cursor, Index_To_Node(j));
+
+			// src[cursor] = Index_To_Node(i);
+			// dst[cursor] = Index_To_Node(j);
 			types[cursor] = Onset_Eq;
 
 			cursor+= (Index)cond1;
@@ -427,8 +436,11 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 			if(cursor == neighbor_count)
 				break;
 
-			src[cursor] = Index_To_Node(i);
-			dst[cursor] = Index_To_Node(j);
+			write_node_numpy2(edge_list, 0, neighbor_offsets[i]+cursor, Index_To_Node(i));
+			write_node_numpy2(edge_list, 1, neighbor_offsets[i]+cursor, Index_To_Node(j));
+
+			// src[cursor] = Index_To_Node(i);
+			// dst[cursor] = Index_To_Node(j);
 			types[cursor] = Onset_End_Eq;
 
 			cursor+= (Index)cond3;
@@ -437,17 +449,22 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 				break;
 		}
 
-		Index j_star = j;
-
 		if(cursor == neighbor_count)
 			continue;
+
+		Index j_star = j;
+
+		
 
 		for(;j<node_count; j++){
 			bool
 				cond2 = (onset_div[j] < onset_div[i] + duration_div[i]);
 
-			src[cursor] = Index_To_Node(i);
-			dst[cursor] = Index_To_Node(j);
+			write_node_numpy2(edge_list, 0, neighbor_offsets[i]+cursor, Index_To_Node(i));
+			write_node_numpy2(edge_list, 1, neighbor_offsets[i]+cursor, Index_To_Node(j));
+
+			// src[cursor] = Index_To_Node(i);
+			// dst[cursor] = Index_To_Node(j);
 			types[cursor] = Inbetween;
 
 			
@@ -465,8 +482,11 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 			int closest_from_above = onset_div[j];
 
 			for(;j < node_count; j++){
-				src[cursor] = Index_To_Node(i);
-				dst[cursor] = Index_To_Node(j);
+				write_node_numpy2(edge_list, 0, neighbor_offsets[i]+cursor, Index_To_Node(i));
+				write_node_numpy2(edge_list, 1, neighbor_offsets[i]+cursor, Index_To_Node(j));
+
+				// src[cursor] = Index_To_Node(i);
+				// dst[cursor] = Index_To_Node(j);
 				types[cursor] = Closest_End;
 
 				bool
@@ -493,8 +513,11 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 
 				
 
-				src[cursor] = Index_To_Node(i);
-				dst[cursor] = Index_To_Node(j);
+				write_node_numpy2(edge_list, 0, neighbor_offsets[i]+cursor, Index_To_Node(i));
+				write_node_numpy2(edge_list, 1, neighbor_offsets[i]+cursor, Index_To_Node(j));
+
+				// src[cursor] = Index_To_Node(i);
+				// dst[cursor] = Index_To_Node(j);
 				types[cursor] = Onset_End_Eq;
 
 				cursor+= (Index)cond3;
@@ -502,8 +525,11 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 				if(cursor == neighbor_count)
 					break;
 
-				src[cursor] = Index_To_Node(i);
-				dst[cursor] = Index_To_Node(j);
+				write_node_numpy2(edge_list, 0, neighbor_offsets[i]+cursor, Index_To_Node(i));
+				write_node_numpy2(edge_list, 1, neighbor_offsets[i]+cursor, Index_To_Node(j));
+
+				// src[cursor] = Index_To_Node(i);
+				// dst[cursor] = Index_To_Node(j);
 				types[cursor] = Onset_Eq;
 
 				cursor+= (Index)cond1;
@@ -622,6 +648,8 @@ static PyObject* GMSamplers_compute_edge_list(PyObject* csamplers, PyObject* arg
 	const npy_intp dim = neighbor_counts[node_count];
 
 	PyArrayObject* edge_types = (PyArrayObject*)PyArray_SimpleNew(1, &dim, EType_Eqv_In_Numpy);
+
+
 
 	fill_in_neighbors(node_count, neighbor_counts, edge_list, edge_types,0, node_count, (int*)PyArray_DATA(onset_div), (int*)PyArray_DATA(duration_div));
 
@@ -873,6 +901,7 @@ static void sample_nodewise_mt_static_job(void* shared_args, void* local_args, s
 	//Mutex_unlock(&GM_mutex);
 }
 
+#ifdef Thread_Count_Arg
 static PyObject* GMSamplers_sample_nodewise_mt_static(PyObject* csamplers, PyObject* args){
 	uint depth;
 	Index samples_per_node;
@@ -1102,7 +1131,7 @@ static PyObject* GMSamplers_sample_nodewise_mt_static(PyObject* csamplers, PyObj
 
 	return PyTuple_Pack(3, samples_per_layer, edge_indices_between_layers, load_per_layer);
 }
-
+#endif
 
 static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args){
 	uint depth;
@@ -1749,7 +1778,9 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 
 static PyMethodDef GMSamplersMethods[] = {
 	{"sample_nodewise", GMSamplers_sample_nodewise, METH_VARARGS, "Random sampling within a graph through multiple layers where each pre-neighborhood of a node in a layer gets sampled separately."},
+	#ifdef Thread_Count_Arg
 	{"sample_nodewise_mt_static", GMSamplers_sample_nodewise_mt_static, METH_VARARGS, "Random sampling within a graph through multiple layers where each pre-neighborhood of a node in a layer gets sampled separately. Multi-threaded with static lock-free Hashsets"},
+	#endif
 	{"sample_layerwise_fully_connected", GMSamplers_sample_layerwise_fully_connected, METH_VARARGS, "Random sampling within a graph through multiple layers where the pre-neighborhood of a layer gets sampled jointly and the layers are fully connected."},
 	
 	// TODO: figure out how to sample without collecting all edges in a list first

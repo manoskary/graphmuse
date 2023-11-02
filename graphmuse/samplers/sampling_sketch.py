@@ -101,7 +101,7 @@ class MuseDataloader(DataLoader):
     num_workers : int
         The number of workers.
     """
-    def __init__(self, graphs, subgraph_size, subgraphs, num_layers=0, samples_per_node=3, batch_size=1, num_workers=0):
+    def __init__(self, graphs, subgraph_size, subgraphs, num_layers=3, samples_per_node=3, batch_size=1, num_workers=0):
         self.graphs = graphs
         self.subgraph_size = subgraph_size
         self.subgraphs = subgraphs
@@ -115,10 +115,10 @@ class MuseDataloader(DataLoader):
 
     def collate_graph_fn(self, batch):
         graphlist = self.graphs[batch]
-        out = self.sample_from_graphlist(graphlist, self.subgraph_size, self.subgraphs, self.num_layers)
+        out = self.sample_from_graphlist(graphlist)
         return out
 
-    def sample_from_graphlist(self, graphlist, subgraph_size, subgraphs, num_layers=None):
+    def sample_from_graphlist(self, graphlist):
         """
         Sample subgraphs from a list of graphs.
         This method samples a subgraph from each graph in the list.
@@ -127,20 +127,18 @@ class MuseDataloader(DataLoader):
 
         # Given a list of graphs, sample a subgraph from each graph of size at most subgraph_size
         for random_graph in graphlist:
-
             region = csamplers.random_score_region(random_graph.note_array, self.subgraph_size)
 
-            (left_extension, left_edges), (right_extension, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(
-                random_graph.c_graph, random_graph.note_array, region, self.samples_per_node)
+            (left_extension, left_edges), (right_extension, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(random_graph.c_graph, random_graph.note_array, region, self.samples_per_node)
 
             # Sample the leftmost layers but why only leftmost?
             left_layers, edge_indices_between_left_layers, _ = csamplers.sample_nodewise(random_graph.c_graph, self.num_layers-2, self.samples_per_node, left_extension)
             # Use edge_indices to retrieve the edges between the leftmost layers
-            edges_between_left_layers = random_graph.edge_index[edge_indices_between_left_layers]
+            edges_between_left_layers = random_graph.edge_index[:,edge_indices_between_left_layers]
 
             # I don't understand what is happening here. Why is the right extension used separately?
             right_layers, edge_indices_between_right_layers = csamplers.sample_neighbors_in_score_graph(random_graph.note_array, self.num_layers-2, self.samples_per_node, right_extension)
-            edges_between_right_layers = random_graph.edge_index[edge_indices_between_right_layers]
+            edges_between_right_layers = random_graph.edge_index[:,edge_indices_between_right_layers]
 
             edges_between_layers = torch.cat((left_edges, right_edges, edges_between_right_layers, edges_between_left_layers), dim=1)
             layers = torch.cat((torch.arange(region[0], region[1]), left_layers, right_layers))
@@ -149,5 +147,5 @@ class MuseDataloader(DataLoader):
         return subgraph_samples
 
     def __getitem__(self, idx):
-        return self.sample_from_graphlist([self.graphs[idx]], self.subgraph_size, self.subgraphs, self.num_layers)
+        return self.sample_from_graphlist([self.graphs[idx]])
 
