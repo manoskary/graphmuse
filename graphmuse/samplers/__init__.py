@@ -2,8 +2,8 @@ from .csamplers import *
 import numpy
 
 def graph(edges):
-	if edges.dtype != numpy.uint32:
-		raise TypeError("currently only numpy.uint32 nodes supported")
+	if edges.dtype not in (numpy.int64, numpy.int32):
+		raise TypeError(f"currently only {numpy.int32} and {numpy.int64} nodes supported, not {edges.dtype}")
 
 	node_count = max(numpy.max(edges[0]), edges[1][-1])+1
 
@@ -15,7 +15,7 @@ def random_score_region(note_array, budget):
 	onsets = note_array["onset_div"].astype(numpy.int32)
 	_,unique_onset_indices = numpy.unique(onsets, return_index=True)
 
-	unique_onset_indices = unique_onset_indices.astype(numpy.uint32)
+	unique_onset_indices = unique_onset_indices.astype(numpy.int64)
 
 	if len(onsets) - unique_onset_indices[-1] > budget and (numpy.diff(unique_onset_indices)>budget).all():
 		raise ValueError("impossible to sample a score region with the given budget within given note array")
