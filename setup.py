@@ -3,7 +3,7 @@ import setuptools
 import os, sys
 import numpy
 from Cython.Build import cythonize
-from psutil import cpu_count
+
 
 dirname = os.path.dirname(__file__)
 graph = [os.path.join(dirname, "graphmuse", "utils", x) for x in ["cython_graph.pyx", "cython_utils.pyx", "cython_sampler.pyx"]]
@@ -15,14 +15,16 @@ graph = [os.path.join(dirname, "graphmuse", "utils", x) for x in ["cython_graph.
 if os.name=='posix':
     eca = ["-std=c11"]
     eca.append("-DPOSIX")
+    from psutil import cpu_count
+    thread_count = cpu_count(logical=False)
+
+    if thread_count>1:
+        eca.append(f"-DThread_Count_Arg={thread_count}")
 elif sys.platform.startswith('win'):
     eca = ["-DWindows"]
 
 
-thread_count = cpu_count(logical=False)
 
-# if thread_count>1:
-#     eca.append(f"-DThread_Count_Arg={thread_count}")
 
 ext_modules = [
     setuptools.Extension(

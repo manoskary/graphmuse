@@ -11,7 +11,7 @@ static PyObject* random_score_region(PyObject* csamplers, PyObject* args){
 	int* onsets = (int*)PyArray_DATA(np_onsets);
 	Index* unique_onset_indices = (Index*)PyArray_DATA(np_unique_onset_indices);
 
-	Index perm_size = PyArray_SIZE(np_unique_onset_indices);
+	Index perm_size = (Index)PyArray_SIZE(np_unique_onset_indices);
 
 	Index* perm = (Index*)malloc(sizeof(Index)*perm_size);
 	for(Index i=0; i<perm_size; i++)
@@ -25,7 +25,7 @@ static PyObject* random_score_region(PyObject* csamplers, PyObject* args){
 		region_start = unique_onset_indices[perm[rand_i]];
 
 		if(region_start + budget >= PyArray_SIZE(np_onsets)){
-			region_end = PyArray_SIZE(np_onsets);
+			region_end = (Index)PyArray_SIZE(np_onsets);
 			break;
 		}
 
@@ -204,7 +204,7 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 		HashSet_init(&samples);
 		edge_list_cursor = 0;
 
-		for(Int i=region_end-1; i>=region_start; i--){
+		for(Int i=region_end-1; i>=(Int)region_start; i--){
 			if(endtimes_cummax[i] <= onsets[region_end-1])
 				break;
 
@@ -305,6 +305,8 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 	}
 	
 	free(edge_list);
+	HashSet_free(&samples);
+	HashSet_free(&node_tracker);
 	
 	return PyTuple_Pack(2, PyTuple_Pack(2, left_extension, left_edges), PyTuple_Pack(2, right_extension, right_edges));
 }
@@ -344,12 +346,12 @@ static PyObject* sample_neighbors_in_score_graph(PyObject* csamplers, PyObject* 
 	int* durations = (int*)PyArray_DATA(np_durations);
 
 	HashSet node_hash_set;
-	HashSet_new(&node_hash_set, PyArray_SIZE(prev_layer));
+	HashSet_new(&node_hash_set, (Index)PyArray_SIZE(prev_layer));
 
 	HashSet node_tracker;
 	HashSet_new(&node_tracker, samples_per_node);
 
-	Index edge_list_size = PyArray_SIZE(prev_layer)*power(samples_per_node, depth);
+	Index edge_list_size = (Index)PyArray_SIZE(prev_layer)*(Index)power(samples_per_node, depth);
 	Node* edge_list = (Node*)malloc(2*sizeof(Node)*edge_list_size);
 
 	ASSERT(edge_list);
@@ -363,7 +365,7 @@ static PyObject* sample_neighbors_in_score_graph(PyObject* csamplers, PyObject* 
 
 		Node* prev_layer_nodes = (Node*)PyArray_DATA(prev_layer);
 
-		Index prev_size = PyArray_SIZE(prev_layer);
+		Index prev_size = (Index)PyArray_SIZE(prev_layer);
 		for(Index n=0; n<prev_size; n++){
 			Node src_node = prev_layer_nodes[n];
 
@@ -386,7 +388,7 @@ static PyObject* sample_neighbors_in_score_graph(PyObject* csamplers, PyObject* 
 			}
 
 			if(i == PyArray_SIZE(np_onsets)-1){
-				upper_bound = PyArray_SIZE(np_onsets);
+				upper_bound = (Index)PyArray_SIZE(np_onsets);
 			}
 			else{
 				upper_bound = i+1;
@@ -482,4 +484,125 @@ static PyObject* sample_neighbors_in_score_graph(PyObject* csamplers, PyObject* 
 	free(edge_list);
 
 	return PyTuple_Pack(2, samples_per_layer, edges_between_layers);
+}
+
+static PyObject* sample_preneighbors_within_region(PyObject* csamplers, PyObject* args){
+	Graph* graph;
+	Index region_start;
+	Index region_end;
+	Index samples_per_node;
+
+	if(!PyArg_ParseTuple(args, "OIII", (PyObject**)&graph, (uint*)&region_start, (uint*)&region_end, (uint*)&samples_per_node)){
+		printf("If you don't provide proper arguments, you can't extend a score region via neighbor sampling.\nHow can you extend a score region via neighbor sampling if you don't provide proper arguments?\n");
+		return NULL;
+	}
+
+	HashSet samples, node_tracker;
+	HashSet_new(&samples, region_end-region_start);
+	HashSet_init(&samples);
+	HashSet_new(&node_tracker, samples_per_node);
+
+	Index edge_list_size = samples_per_node*(region_end-region_start);
+	Node* edge_list = (Node*)malloc(2*sizeof(Node)*edge_list_size);
+	Index edge_list_cursor=0;
+
+	ASSERT(edge_list);
+
+	for(Index j=region_start+1; j<region_end; j++){
+		printf("j: %u\n", j);
+		Index offset = graph->pre_neighbor_offsets[j];
+		Index pre_neighbor_count = graph->pre_neighbor_offsets[j+1]-offset;
+
+		Index intersection_start = 0;
+
+		while(intersection_start < pre_neighbor_count && Node_To_Index(src_node_at(graph, offset+intersection_start)) < region_start)
+			intersection_start++;
+
+		Index intersection_end = intersection_start+1;
+
+		while(intersection_end < pre_neighbor_count && Node_To_Index(src_node_at(graph, offset+intersection_end)) < region_end)
+			intersection_end++;
+
+		Index intersection_count = intersection_end - intersection_start;
+
+		if(intersection_count <= samples_per_node){
+			for(Index ix=intersection_start; ix < intersection_end; ix++){
+				Node i = src_node_at(graph, offset + ix);
+				HashSet_add_node(&samples, i);
+
+				ASSERT(edge_list_cursor < edge_list_size);
+
+				edge_list[2*edge_list_cursor]=i;
+				edge_list[2*edge_list_cursor+1]=(Node)j;
+				edge_list_cursor++;
+			}
+		}
+		/*
+			expected number of attempts to insert a unique sample into set with k elements is n/(n-k)
+			for k=n*f, this results in 1/(1-f), meaning, if we want to limit the expected number of attempts
+			to let's say 4, f has to be at most 3/4=0.75
+
+			if this threshold is reached, random subset is sampled via random permutation
+			this is viable since memory waste is at most 25% (for temporary storage)
+		*/
+		else if(samples_per_node > (uint)(0.75*intersection_count)){
+			Node* perm = (Node*)malloc(sizeof(Node)*intersection_count);
+
+			ASSERT(perm);
+
+			for(Index ix=0; ix<intersection_count; ix++)
+				perm[ix]=src_node_at(graph, offset + ix + intersection_start);
+			
+
+			for(Index ix=0; ix<samples_per_node; ix++){
+				Index rand_ix = ix + rand()%(intersection_count-ix);
+
+				Node i = perm[rand_ix];
+
+				HashSet_add_node(&samples, i);
+
+				ASSERT(edge_list_cursor < edge_list_size);
+
+				edge_list[2*edge_list_cursor]=i;
+				edge_list[2*edge_list_cursor+1]=(Node)j;
+				edge_list_cursor++;
+
+				perm[rand_ix]=perm[ix];
+			}
+
+			free(perm);
+		}
+		else{
+			HashSet_init(&node_tracker);
+
+			for(uint sample=0; sample<samples_per_node; sample++){
+				Node i;
+
+				for(;;){
+					Index ix = intersection_start + rand()%intersection_count;
+					i = src_node_at(graph, offset + ix)	;
+					if(HashSet_add_node(&node_tracker, i))
+						break;
+				}
+
+				HashSet_add_node(&samples, i);
+
+				ASSERT(edge_list_cursor < edge_list_size);
+				
+
+				edge_list[2*edge_list_cursor]=i;
+				edge_list[2*edge_list_cursor+1]=(Node)j;
+				edge_list_cursor++;
+			}
+		}
+	}
+
+	PyArrayObject* np_samples = HashSet_to_numpy(&samples);
+	PyArrayObject* np_edges = numpy_edge_list(edge_list, edge_list_cursor);
+
+	free(edge_list);
+	HashSet_free(&samples);
+	HashSet_free(&node_tracker);
+
+	return PyTuple_Pack(2, np_samples, np_edges);
 }

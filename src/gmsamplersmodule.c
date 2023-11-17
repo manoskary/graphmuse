@@ -38,8 +38,8 @@ typedef uint8_t EdgeType;
 #define Inbetween (uint8_t)2
 #define Closest_End (uint8_t)3
 
-#define Node_To_Index(n) (n)
-#define Index_To_Node(i) (i)
+#define Node_To_Index(n) ((Index)(n))
+#define Index_To_Node(i) ((Node)(i))
 
 static uint64 power(uint32 base, uint32 exponent){
 	uint64 p = 1;
@@ -70,15 +70,17 @@ static PyArrayObject* numpy_edge_list(Node* edge_list, Index edge_list_size){
 
 	return result;
 }
-
-
-#include <mt.c>
-//#define GM_DEBUG_OFF
 #include <GM_assert.h>
-#include <threadpool.c>
+
 #include <utils.c>
-#include <mt_hashset_static.c>
 #include <hashset.c>
+#ifdef Thread_Count_Arg
+#include <mt.c>
+#include <threadpool.c>
+#include <mt_hashset_static.c>
+#endif
+//#define GM_DEBUG_OFF
+
 
 // this should be fine actually since it is used on random nodes
 static Key Node_hash(Node n){
@@ -105,7 +107,7 @@ static PyArrayObject* HashSet_to_numpy(HashSet* hash_set){
 
 
 
-
+#ifdef Thread_Count_Arg
 
 static bool MT_HashSet_Static_add_node(MT_HashSet_Static* hs, Node n){
 	return MT_HashSet_Static_add(hs, Node_hash(n));
@@ -124,7 +126,7 @@ static PyArrayObject* MT_HashSet_Static_to_numpy(MT_HashSet_Static* hash_set){
 
 
 Threadpool* GMSamplers_thread_pool;
-
+#endif
 /*
 static void count_neighbors(Index from, Index to, Index node_count, Index* neighbor_counts, float* onset_beat, float* duration_beat, float* pitch){
 	for(Index i=from; i<to; i++)
@@ -350,6 +352,7 @@ static void count_neighbors(Index node_count, Index* neighbor_counts, Index from
 	}
 }
 
+#ifdef Thread_Count_Arg
 struct CountNeighborsArgs{
 	Index node_count; 
 	Index* neighbor_counts;
@@ -371,6 +374,8 @@ static void count_neighbors_job(void* shared_args, void* local_args, struct Thre
 
 	count_neighbors(cna->node_count, cna->neighbor_counts + from + job_ID*(CLS/sizeof(Index)), from, to, cna->onset_div, cna->duration_div);
 }
+
+#endif
 
 static void neighbor_counts_to_offsets(Index node_count, Index* neighbor_counts){
 	// TODO: SIMD
@@ -560,14 +565,16 @@ static PyObject* GMSamplers_compute_edge_list(PyObject* csamplers, PyObject* arg
 	#ifdef Thread_Count_Arg
 
 	const Index thread_count = Thread_Count_Arg;//(Index)omp_get_max_threads();
+	Index* neighbor_counts = (Index*)malloc(sizeof(Index)*(node_count+1) + CLS*(thread_count-1));
 
 	#else
 
 	const Index thread_count = 1;
+	Index* neighbor_counts = (Index*)malloc(sizeof(Index)*(node_count+1));
 
 	#endif
 
-	Index* neighbor_counts = (Index*)malloc(sizeof(Index)*(node_count+1) + CLS*(thread_count-1));
+	
 
 	ASSERT(neighbor_counts);
 
@@ -734,7 +741,7 @@ static PyArrayObject* index_array_to_numpy(Index* indices, uint size){
 
 // 	return true;
 // }
-
+#ifdef Thread_Count_Arg
 struct SampleNodewiseLocals{
 	Node sample_src;
 	uint depth;
@@ -750,8 +757,6 @@ struct SampleNodewiseShared{
 
 	Index init_size;
 };
-
-Mutex GM_mutex;
 
 static void sample_nodewise_mt_static_job(void* shared_args, void* local_args, struct Thread_ID ID, Stack* jobstack, Mutex* jobstack_mutex){
 	//Mutex_lock(&GM_mutex);
@@ -901,7 +906,7 @@ static void sample_nodewise_mt_static_job(void* shared_args, void* local_args, s
 	//Mutex_unlock(&GM_mutex);
 }
 
-#ifdef Thread_Count_Arg
+
 static PyObject* GMSamplers_sample_nodewise_mt_static(PyObject* csamplers, PyObject* args){
 	uint depth;
 	Index samples_per_node;
@@ -1214,7 +1219,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 		//TODO: what if target nodes doesnt have shape (N,) or (N,1)?
 		// Py_INCREF(target_nodes);
 		// target_nodes_references++;
-		prev_size = PyArray_SIZE(target_nodes);
+		prev_size = (Index)PyArray_SIZE(target_nodes);
 
 		PyList_SET_ITEM(samples_per_layer, depth, (PyObject*)target_nodes);
 
@@ -1342,7 +1347,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 		node_hash_set = tmp;
 
 
-		prev_size = PyArray_SIZE(new_layer);
+		prev_size = (Index)PyArray_SIZE(new_layer);
 		prev_layer = new_layer;
 
 		PyList_SET_ITEM(samples_per_layer, layer-1, (PyObject*)new_layer);
@@ -1481,7 +1486,7 @@ static PyObject* GMSamplers_sample_layerwise_randomly_connected(PyObject* csampl
 		//TODO: what to do if target_nodes is not owned by the caller?
 		//TODO: what if target nodes doesnt have shape (N,) or (N,1)?
 		Py_INCREF(target_nodes);
-		prev_size = PyArray_SIZE(target_nodes);
+		prev_size = (Index)PyArray_SIZE(target_nodes);
 
 		PyList_SET_ITEM(samples_per_layer, depth, (PyObject*)target_nodes);
 
@@ -1513,7 +1518,7 @@ static PyObject* GMSamplers_sample_layerwise_randomly_connected(PyObject* csampl
 
 		
 
-		Index sum_pre_neighbor_count = sum_preneighbor_counts(prev_layer_nodes, PyArray_SIZE(prev_layer), graph->pre_neighbor_offsets);
+		Index sum_pre_neighbor_count = sum_preneighbor_counts(prev_layer_nodes, (Index)PyArray_SIZE(prev_layer), graph->pre_neighbor_offsets);
 
 		
 
@@ -1522,7 +1527,7 @@ static PyObject* GMSamplers_sample_layerwise_randomly_connected(PyObject* csampl
 		ASSERT(sample_canvas_valid);
 		
 		
-		gather_edge_indices(prev_layer_nodes, PyArray_SIZE(prev_layer), graph->pre_neighbor_offsets, sample_canvas);
+		gather_edge_indices(prev_layer_nodes, (Index)PyArray_SIZE(prev_layer), graph->pre_neighbor_offsets, sample_canvas);
 
 		HashSet_init(&node_hash_set);
 
@@ -1563,7 +1568,7 @@ static PyObject* GMSamplers_sample_layerwise_randomly_connected(PyObject* csampl
 		node_hash_set = tmp;
 
 
-		prev_size = PyArray_SIZE(new_layer);
+		prev_size = (Index)PyArray_SIZE(new_layer);
 		prev_layer = new_layer;
 
 		PyList_SET_ITEM(samples_per_layer, layer-1, (PyObject*)new_layer);
@@ -1659,7 +1664,7 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 		//TODO: what to do if target_nodes is not owned by the caller?
 		//TODO: what if target nodes doesnt have shape (N,) or (N,1)?
 		Py_INCREF(target_nodes);
-		prev_size = PyArray_SIZE(target_nodes);
+		prev_size = (Index)PyArray_SIZE(target_nodes);
 
 		PyList_SET_ITEM(samples_per_layer, depth, (PyObject*)target_nodes);
 
@@ -1687,7 +1692,7 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 
 		
 
-		Int sum_pre_neighbor_count = (Int)sum_preneighbor_counts(prev_layer_nodes, PyArray_SIZE(prev_layer), graph->pre_neighbor_offsets);
+		Int sum_pre_neighbor_count = (Int)sum_preneighbor_counts(prev_layer_nodes, (Index)PyArray_SIZE(prev_layer), graph->pre_neighbor_offsets);
 
 		
 
@@ -1696,7 +1701,7 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 		ASSERT(edge_index_canvas_valid);
 		
 		
-		gather_edge_indices(prev_layer_nodes, PyArray_SIZE(prev_layer), graph->pre_neighbor_offsets, edge_index_canvas);
+		gather_edge_indices(prev_layer_nodes, (Index)PyArray_SIZE(prev_layer), graph->pre_neighbor_offsets, edge_index_canvas);
 
 		HashSet_init(&node_hash_set);
 
@@ -1760,7 +1765,7 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 		node_hash_set = tmp;
 
 
-		prev_size = PyArray_SIZE(new_layer);
+		prev_size = (Index)PyArray_SIZE(new_layer);
 		prev_layer = new_layer;
 
 		PyList_SET_ITEM(samples_per_layer, layer-1, (PyObject*)new_layer);
@@ -1790,6 +1795,7 @@ static PyMethodDef GMSamplersMethods[] = {
 	{"c_random_score_region", random_score_region, METH_VARARGS, "Samples a random region (integer interval) from a score graph"},
 	{"c_extend_score_region_via_neighbor_sampling", extend_score_region_via_neighbor_sampling, METH_VARARGS, "Given a score region, add samples from outside the region aquired via neighboorhood sampling"},
 	{"c_sample_neighbors_in_score_graph", sample_neighbors_in_score_graph, METH_VARARGS, "nodewise sampling of neighbors without pre-computed lookup table"},
+	{"c_sample_preneighbors_within_region", sample_preneighbors_within_region, METH_VARARGS, ""},
 	{NULL, NULL, 0, NULL}
 };
 
