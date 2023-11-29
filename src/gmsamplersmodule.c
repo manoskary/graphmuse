@@ -1065,7 +1065,7 @@ static PyObject* GMSamplers_sample_nodewise_mt_static(PyObject* csamplers, PyObj
 
 	GMSamplers_thread_pool->sync_handle->shared_data = (void*)(&shared);
 
-	Mutex_init(&GM_mutex, 0);
+	//Mutex_init(&GM_mutex, 0);
 
 	Threadpool_wakeup_workers(GMSamplers_thread_pool);
 	Threadpool_participate_until_completion(GMSamplers_thread_pool);
@@ -1175,6 +1175,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 	Index prev_size;
 
 	HashSet load_set;
+	HashSet total_samples;
 
 	PyArrayObject* prev_layer;
 
