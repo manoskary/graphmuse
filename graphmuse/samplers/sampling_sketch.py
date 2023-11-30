@@ -101,12 +101,19 @@ class MuseDataloader(DataLoader):
     num_workers : int
         The number of workers.
     """
-    def __init__(self, graphs, subgraph_size, subgraphs, num_layers=3, samples_per_node=3, batch_size=1, num_workers=0):
+    def __init__(self, graphs, subgraph_size, subgraphs, num_layers=3, samples_per_node=3, batch_size=1, num_workers=0, sample_rightmost=False):
         self.graphs = graphs
         self.subgraph_size = subgraph_size
         self.subgraphs = subgraphs
+        self.sample_rightmost = sample_rightmost
         self.num_layers = num_layers # This is for a later version with node-wise sampling
         self.samples_per_node = samples_per_node
+        self.etypes = {
+            "onset": 0,
+            "consecutive": 1,
+            "during": 2,
+            "silence": 3,
+        }
         self.onsets = {}
         self.onset_count = {}
         dataset = range(len(graphs))
@@ -128,21 +135,26 @@ class MuseDataloader(DataLoader):
         # Given a list of graphs, sample a subgraph from each graph of size at most subgraph_size
         for random_graph in graphlist:
             region = csamplers.random_score_region(random_graph.note_array, self.subgraph_size)
+            # TODO: include edge_types
+            _, edge_index_within_region = csamplers.sample_preneighbors_within_region(random_graph.c_graph, region, self.samples_per_node)
 
-            (left_extension, left_edges), (right_extension, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(random_graph.c_graph, random_graph.note_array, region, self.samples_per_node)
+            #TODO: sample rightmost should be optional
+            (left_extension, left_edges), (right_extension, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(random_graph.c_graph, random_graph.note_array, region, self.samples_per_nodel, sample_rightmost, sample_leftmost, sample_rightmost)
 
-            # Sample the leftmost layers but why only leftmost?
+            # Sample leftmost node-wise by num layers (this is normal node-wise sampling)
             left_layers, edge_indices_between_left_layers, _ = csamplers.sample_nodewise(random_graph.c_graph, self.num_layers-2, self.samples_per_node, left_extension)
-            # Use edge_indices to retrieve the edges between the leftmost layers
-            edges_between_left_layers = random_graph.edge_index[:,edge_indices_between_left_layers]
 
-            # I don't understand what is happening here. Why is the right extension used separately?
-            right_layers, edge_indices_between_right_layers = csamplers.sample_neighbors_in_score_graph(random_graph.note_array, self.num_layers-2, self.samples_per_node, right_extension)
-            edges_between_right_layers = random_graph.edge_index[:,edge_indices_between_right_layers]
-
-            edges_between_layers = torch.cat((left_edges, right_edges, edges_between_right_layers, edges_between_left_layers), dim=1)
+            if self.sample_rightmost:
+                # Sample rightmost node-wise by num layers (because of reverse edges missing)
+                right_layers, edge_indices_between_right_layers = csamplers.sample_neighbors_in_score_graph(random_graph.note_array, self.num_layers-2, self.samples_per_node, right_extension)
+            else:
+                right_layers, edge_indices_between_right_layers = [], []
+            edges_between_layers = torch.cat((left_edges, right_edges, edge_indices_between_right_layers, edge_indices_between_left_layers), dim=1)
             layers = torch.cat((torch.arange(region[0], region[1]), left_layers, right_layers))
             subgraph_samples.append((layers, edges_between_layers))
+
+            # TODO: translate edges to subgraph indices
+            # look mattermost and this source: https://stackoverflow.com/questions/65565461/how-to-map-element-in-pytorch-tensor-to-id
 
         return subgraph_samples
 

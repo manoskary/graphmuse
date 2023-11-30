@@ -46,3 +46,31 @@ def sample_neighbors_in_score_graph(note_array, depth, samples_per_node, targets
 	durations = note_array["duration_div"].astype(numpy.int32)
 
 	return c_sample_neighbors_in_score_graph(onsets, durations, depth, samples_per_node, targets)
+
+def sample_preneighbors_within_region(cgraph, region, samples_per_node=10):
+	"""
+	Samples Neighbors within a score region.
+
+	Parameters
+	----------
+	cgraph : Graph
+		The score graph implemented in c. It is an attribute of the HeteroScoreGraph.
+	region : tuple
+		The region to sample from. It is a tuple of two integers, start and end.
+		The region is inclusive on the left and exclusive on the right.
+	samples_per_node : int
+		The number of samples per node.
+
+	Returns
+	-------
+	Samples: np.ndarray
+		The sampled nodes. It is a 1D array of integers. It might not contain all nodes in the region.
+	edge_indices: np.ndarray (2, num_edges)
+		The edge indices. It is a 2D array of integers. The first row contains the source nodes, the second row the destination nodes.
+	"""
+	region_start, region_end = region
+
+	if region_start>=region_end:
+		raise ValueError("invalid region given")
+
+	return c_sample_preneighbors_within_region(cgraph, region_start, region_end, samples_per_node)
