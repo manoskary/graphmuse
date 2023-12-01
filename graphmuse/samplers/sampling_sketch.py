@@ -170,7 +170,7 @@ class MuseDataloader(DataLoader):
                 Data(x=random_graph.x[sampled_nodes].to(self.device), edge_index=new_edge_index)).to(self.device)
 
         # Join all subgraphs together
-        batch = Batch.from_datalist(subgraph_samples)
+        batch = Batch().from_datalist(subgraph_samples)
 
         return batch
 
