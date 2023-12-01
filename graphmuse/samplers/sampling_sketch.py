@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader, Sampler
 import torch
 import graphmuse.samplers as csamplers
 from graphmuse.utils.graph import HeteroScoreGraph
-from pytorch_geometric.data import Data, Batch
+from torch_geometric.data import Data, Batch
 
 
 class SubgraphCreationSampler(Sampler):
