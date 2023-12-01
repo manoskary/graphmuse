@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader, Sampler
 import torch
 import graphmuse.samplers as csamplers
 from graphmuse.utils.graph import HeteroScoreGraph
+from pytorch_geometric.data import Data, Batch
 
 
 class SubgraphCreationSampler(Sampler):
@@ -101,10 +102,11 @@ class MuseDataloader(DataLoader):
     num_workers : int
         The number of workers.
     """
-    def __init__(self, graphs, subgraph_size, subgraphs, num_layers=3, samples_per_node=3, batch_size=1, num_workers=0, sample_rightmost=False):
+    def __init__(self, graphs, subgraph_size, subgraphs, num_layers=3, samples_per_node=3, batch_size=1, num_workers=0, sample_rightmost=False, device="cpu"):
         self.graphs = graphs
         self.subgraph_size = subgraph_size
         self.subgraphs = subgraphs
+        self.device = device
         self.sample_rightmost = sample_rightmost
         self.num_layers = num_layers # This is for a later version with node-wise sampling
         self.samples_per_node = samples_per_node
@@ -153,10 +155,24 @@ class MuseDataloader(DataLoader):
             layers = torch.cat((torch.arange(region[0], region[1]), left_layers, right_layers))
             subgraph_samples.append((layers, edges_between_layers))
 
-            # TODO: translate edges to subgraph indices
+            # Translate edges to subgraph indices (do this on GPU when available).
+            # This is a bit tricky because we need to map the indices of the subgraph to the indices of the original graph
             # look mattermost and this source: https://stackoverflow.com/questions/65565461/how-to-map-element-in-pytorch-tensor-to-id
+            subgraph_edge_index = torch.cat((edge_index_within_region, edges_between_layers), dim=1).to(self.device)
+            sampled_nodes = torch.unique(subgraph_edge_index).to(self.device)
+            new_mapping = torch.arange(sampled_nodes.shape[0], device=self.device)
+            nodes_remap = torch.empty_like(random_graph.x.shape[0]).to(self.device)
+            nodes_remap[sampled_nodes] = new_mapping
+            # Map the indices of the subgraph to the indices of the original graph
+            new_edge_index = nodes_remap[subgraph_edge_index]
+            # Create a PyG graph
+            subgraph_samples.append(
+                Data(x=random_graph.x[sampled_nodes].to(self.device), edge_index=new_edge_index)).to(self.device)
 
-        return subgraph_samples
+        # Join all subgraphs together
+        batch = Batch.from_datalist(subgraph_samples)
+
+        return batch
 
     def __getitem__(self, idx):
         return self.sample_from_graphlist([self.graphs[idx]])
