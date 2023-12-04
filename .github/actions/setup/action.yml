@@ -15,7 +15,7 @@ inputs:
     default: '0.14.0'
   torch-geometric-version:
     required: false
-    default: '2.0.1'
+    default: '2.3.1'
 
 runs:
   using: composite
