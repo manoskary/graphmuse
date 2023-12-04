@@ -13,6 +13,9 @@ inputs:
   torchvision-version:
     required: false
     default: '0.14.0'
+  torch-geometric-version:
+    required: false
+    default: '2.0.1'
 
 runs:
   using: composite
@@ -30,7 +33,14 @@ runs:
         python -c "import torch; print('CUDA:', torch.version.cuda)"
       shell: bash
 
-    - name: Install extension packages
+    - name: Install PyTorch Geometric ${{ inputs.torch-geometric-version }}
       run: |
-        pip install torch-scatter torch-sparse torch-cluster torch-spline-conv -f https://data.pyg.org/whl/torch-${{ inputs.torch-version }}+${{ inputs.cuda-version }}.html
+        pip install torch-geometric==${{ inputs.torch-geometric-version }}
+        python -c "import torch_geometric; print('PyTorch Geometric:', torch_geometric.__version__)"
       shell: bash
+
+# Not necessary it creates a conflict with the installation
+#    - name: Install extension packages
+#      run: |
+#        pip install torch-scatter torch-sparse torch-cluster torch-spline-conv -f https://data.pyg.org/whl/torch-${{ inputs.torch-version }}+${{ inputs.cuda-version }}.html
+#      shell: bash

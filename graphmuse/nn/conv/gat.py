@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from torch_scatter import scatter
+# from torch_scatter import scatter
 
 
 # TODO check for correctness
@@ -75,21 +75,21 @@ class GATConvLayer(nn.Module):
             if self.fc_fij.bias is not None:
                 nn.init.constant_(self.fc_fij.bias, 0.)
 
-    def forward(self, features, edge_index, edge_features=None):
-        prefix_shape = features.shape[:-1]
-        fc_src = self.el(features).view(*prefix_shape, self.num_heads, self.in_features)
-        fc_dst = self.er(features).view(*prefix_shape, self.num_heads, self.in_features)
-        el = (fc_src[edge_index[0]] * self.attnl).sum(dim=-1).unsqueeze(-1)
-        er = (fc_dst[edge_index[1]] * self.attnr).sum(dim=-1).unsqueeze(-1)
-        if edge_features is not None and self.in_edge_feats is not None:
-            edge_shape = edge_features.shape[:-1]
-            fc_eij = self.fc_fij(edge_features).view(*edge_shape, self.num_heads, self.in_features)
-            ee = (fc_eij * self.attne).sum(dim=-1).unsqueeze(-1)
-            e = self.leaky_relu(el + er + ee)
-        else:
-            e = self.leaky_relu(el + er)
-        # Not Quite the same as the Softmax in the paper.
-        a = self.softmax(self.attndrop(e)).mean(dim=1)
-        h = self.linear(features)
-        out = scatter(a * h[edge_index[1]], edge_index[0], 0, out=h.clone(), reduce='add')
-        return out
+    # def forward(self, features, edge_index, edge_features=None):
+    #     prefix_shape = features.shape[:-1]
+    #     fc_src = self.el(features).view(*prefix_shape, self.num_heads, self.in_features)
+    #     fc_dst = self.er(features).view(*prefix_shape, self.num_heads, self.in_features)
+    #     el = (fc_src[edge_index[0]] * self.attnl).sum(dim=-1).unsqueeze(-1)
+    #     er = (fc_dst[edge_index[1]] * self.attnr).sum(dim=-1).unsqueeze(-1)
+    #     if edge_features is not None and self.in_edge_feats is not None:
+    #         edge_shape = edge_features.shape[:-1]
+    #         fc_eij = self.fc_fij(edge_features).view(*edge_shape, self.num_heads, self.in_features)
+    #         ee = (fc_eij * self.attne).sum(dim=-1).unsqueeze(-1)
+    #         e = self.leaky_relu(el + er + ee)
+    #     else:
+    #         e = self.leaky_relu(el + er)
+    #     # Not Quite the same as the Softmax in the paper.
+    #     a = self.softmax(self.attndrop(e)).mean(dim=1)
+    #     h = self.linear(features)
+    #     out = scatter(a * h[edge_index[1]], edge_index[0], 0, out=h.clone(), reduce='add')
+    #     return out

@@ -1,4 +1,4 @@
-from .sage import SageConvLayer
+from torch_geometric.nn import SAGEConv as SageConvLayer
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
