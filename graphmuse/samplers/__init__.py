@@ -22,7 +22,7 @@ def random_score_region(note_array, budget):
 
 	return c_random_score_region(onsets, unique_onset_indices, budget)
 
-def extend_score_region_via_neighbor_sampling(graph, note_array, region, samples_per_node):
+def extend_score_region_via_neighbor_sampling(graph, note_array, region, samples_per_node, sample_rightmost=True):
 	region_start, region_end = region
 	onsets = note_array["onset_div"].astype(numpy.int32)
 	durations = note_array["duration_div"].astype(numpy.int32)

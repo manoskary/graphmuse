@@ -141,9 +141,10 @@ class MuseDataloader(DataLoader):
             _, edge_index_within_region = csamplers.sample_preneighbors_within_region(random_graph.c_graph, region, self.samples_per_node)
 
             #TODO: sample rightmost should be optional
-            (left_extension, left_edges), (right_extension, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(random_graph.c_graph, random_graph.note_array, region, self.samples_per_node, sample_rightmost, sample_leftmost, sample_rightmost)
+            # This is the last layer neighbors extension
+            (left_extension, left_edges), (right_extension, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(random_graph.c_graph, random_graph.note_array, region, self.samples_per_node, sample_rightmost=self.sample_rightmost)
 
-            # Sample leftmost node-wise by num layers (this is normal node-wise sampling)
+            # Sample leftmost typical node-wise by num layers excluding the last layer which was sampled above
             left_layers, edge_indices_between_left_layers, _ = csamplers.sample_nodewise(random_graph.c_graph, self.num_layers-2, self.samples_per_node, left_extension)
 
             if self.sample_rightmost:

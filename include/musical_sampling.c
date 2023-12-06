@@ -509,7 +509,7 @@ static PyObject* sample_preneighbors_within_region(PyObject* csamplers, PyObject
 	ASSERT(edge_list);
 
 	for(Index j=region_start+1; j<region_end; j++){
-		printf("j: %u\n", j);
+//		printf("j: %u\n", j);
 		Index offset = graph->pre_neighbor_offsets[j];
 		Index pre_neighbor_count = graph->pre_neighbor_offsets[j+1]-offset;
 
