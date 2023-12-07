@@ -1797,7 +1797,7 @@ static PyMethodDef GMSamplersMethods[] = {
 	// TODO: figure out how to sample without collecting all edges in a list first
 	{"c_sample_layerwise_randomly_connected", GMSamplers_sample_layerwise_randomly_connected, METH_VARARGS, "Random sampling within a graph through multiple layers where the pre-neighborhood of a layer gets sampled jointly, but only a random subset of the connections between layers is sampled."},
 	
-	{"c_compute_edge_list", GMSamplers_compute_edge_list, METH_VARARGS, "Compute edge list from onset_div and duration_div."},
+	{"compute_edge_list", GMSamplers_compute_edge_list, METH_VARARGS, "Compute edge list from onset_div and duration_div."},
 	{"c_random_score_region", random_score_region, METH_VARARGS, "Samples a random region (integer interval) from a score graph"},
 	{"c_extend_score_region_via_neighbor_sampling", extend_score_region_via_neighbor_sampling, METH_VARARGS, "Given a score region, add samples from outside the region aquired via neighboorhood sampling"},
 	{"c_sample_neighbors_in_score_graph", sample_neighbors_in_score_graph, METH_VARARGS, "nodewise sampling of neighbors without pre-computed lookup table"},
