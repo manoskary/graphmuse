@@ -54,6 +54,7 @@ def extend_score_region_via_neighbor_sampling(cgraph, note_array, region, sample
 	left_extension : Tuple()
 
 	"""
+
 	region_start, region_end = region
 	onsets = note_array["onset_div"].astype(numpy.int32)
 	durations = note_array["duration_div"].astype(numpy.int32)

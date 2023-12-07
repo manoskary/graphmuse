@@ -49,7 +49,7 @@ for i in range(num_graphs):
     graphs.append(graph)
 
 # create dataloader
-dataloader = MuseDataloader(graphs, subgraph_size=100, subgraphs=4, batch_size=1, num_workers=1)
+dataloader = MuseDataloader(graphs, subgraph_size=100, subgraphs=4, batch_size=1, num_workers=0)
 # iterate over dataloader
 batch = next(iter(dataloader))
 
