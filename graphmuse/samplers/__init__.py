@@ -11,6 +11,9 @@ def graph(edges):
 
 	return Graph(edges, node_count)
 
+def sample_nodewise(cgraph, depth, samples_per_node, targets):
+	return c_sample_nodewise(cgraph, depth, samples_per_node, targets)
+
 def random_score_region(note_array, budget):
 	onsets = note_array["onset_div"].astype(numpy.int32)
 	_,unique_onset_indices = numpy.unique(onsets, return_index=True)

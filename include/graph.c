@@ -3,6 +3,7 @@ typedef struct{
 	Index node_count;
 	Index* pre_neighbor_offsets;
 	PyArrayObject* edge_list;
+	//PyArrayObject* edge_types;
 } Graph;
 
 
@@ -16,10 +17,11 @@ static void Graph_dealloc(Graph* graph){
 static PyObject* Graph_new(PyTypeObject* type, PyObject* args, PyObject* kwds){
 	Index node_count;
 	PyArrayObject* edges;
+	//PyArrayObject* edge_types;
 
 	//	ASSUMPTION: edge list should be sorted in the second argument or destination
 
-	if(!PyArg_ParseTuple(args, "OI", (PyObject**)&edges, &node_count)){
+	if(!PyArg_ParseTuple(args, "OI", (PyObject**)&edges, /*(PyObject**)&edge_types,*/ &node_count)){
 		puts("no new graph without correct args");
 		return NULL;
 	}
@@ -54,11 +56,12 @@ static PyObject* Graph_new(PyTypeObject* type, PyObject* args, PyObject* kwds){
 
 static int Graph_init(Graph* graph, PyObject* args, PyObject* kwds){
 	PyArrayObject* edges;
+	//PyArrayObject* edge_types;
 	Index node_count;
 
 	//	ASSUMPTION: edge list should be sorted in the second argument
 
-	if(!PyArg_ParseTuple(args, "OI", (PyObject**)&edges, &node_count)){
+	if(!PyArg_ParseTuple(args, "OI", (PyObject**)&edges, /*(PyObject**)&edge_types,*/ &node_count)){
 		puts("couldn't parse edge list");
 		return -1;
 	}
@@ -66,6 +69,7 @@ static int Graph_init(Graph* graph, PyObject* args, PyObject* kwds){
 	graph->node_count = node_count;
 
 	graph->edge_list = edges;
+	//graph->edge_types = edge_types;
 
 	Py_INCREF(edges);
 
@@ -126,12 +130,19 @@ static PyObject* Graph_preneighborhood_count(Graph* graph, PyObject* args){
 	return PyLong_FromIndex(pre_neighbor_count);
 }
 
-
+static PyObject* Graph_edge_list(Graph* graph, void* closure){
+	return (PyObject*)graph->edge_list;
+}
 
 static PyMethodDef Graph_methods[] = {
 	{"print", (PyCFunction)Graph_print, METH_NOARGS, "print the graph"},
 	{"preneighborhood_count", (PyCFunction)Graph_preneighborhood_count, METH_VARARGS, "get the size of the pre-neighborhood of a node within the graph"},
 	{NULL}
+};
+
+static PyGetSetDef Graph_properties[] = {
+	{"edge_list", Graph_edge_list, NULL, "getter for underlying edge list of Graph", NULL},
+	NULL
 };
 
 static PyTypeObject GraphType = {
@@ -144,5 +155,6 @@ static PyTypeObject GraphType = {
     .tp_new = Graph_new,
     .tp_init = (initproc) Graph_init,
     .tp_dealloc = (destructor) Graph_dealloc,
-    .tp_methods = Graph_methods
+    .tp_methods = Graph_methods,
+    //.tp_getset = Graph_properties
 };

@@ -138,21 +138,21 @@ class MuseDataloader(DataLoader):
         for random_graph in graphlist:
             region = csamplers.random_score_region(random_graph.note_array, self.subgraph_size)
             # TODO: include edge_types
-            _, edge_index_within_region = csamplers.sample_preneighbors_within_region(random_graph.c_graph, region, self.samples_per_node)
+            _, edges_within_region = csamplers.sample_preneighbors_within_region(random_graph.c_graph, region, self.samples_per_node)
 
 
             # This is the last layer neighbors extension
             (left_extension, left_edges), (right_extension, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(random_graph.c_graph, random_graph.note_array, region, self.samples_per_node, self.sample_rightmost)
 
             # Sample leftmost typical node-wise by num layers excluding the last layer which was sampled above
-            left_layers, edge_indices_between_left_layers, _ = csamplers.sample_nodewise(random_graph.c_graph, self.num_layers-2, self.samples_per_node, left_extension)
+            left_layers, edges_between_left_layers, _ = csamplers.sample_nodewise(random_graph.c_graph, self.num_layers-2, self.samples_per_node, left_extension)
 
             if self.sample_rightmost:
                 # Sample rightmost node-wise by num layers (because of reverse edges missing)
-                right_layers, edge_indices_between_right_layers = csamplers.sample_neighbors_in_score_graph(random_graph.note_array, self.num_layers-2, self.samples_per_node, right_extension)
+                right_layers, edges_between_right_layers = csamplers.sample_neighbors_in_score_graph(random_graph.note_array, self.num_layers-2, self.samples_per_node, right_extension)
             else:
-                right_layers, edge_indices_between_right_layers = [], []
-            edges_between_layers = torch.cat((left_edges, right_edges, edge_indices_between_right_layers, edge_indices_between_left_layers), dim=1)
+                right_layers, edges_between_right_layers = [], []
+            edges_between_layers = torch.cat((left_edges, right_edges, edges_between_right_layers, edges_between_left_layers), dim=1)
             layers = torch.cat((torch.arange(region[0], region[1]), left_layers, right_layers))
             subgraph_samples.append((layers, edges_between_layers))
 

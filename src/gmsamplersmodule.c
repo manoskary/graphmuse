@@ -683,11 +683,10 @@ static PyArrayObject* index_array_to_numpy(Index* indices, uint size){
 	const npy_intp dims = size;
 	PyArrayObject* np_arr = (PyArrayObject*)PyArray_SimpleNew(1, &dims, Index_Eqv_In_Numpy);
 
-	Index* np_indices = (Index*)PyArray_DATA(np_arr);
-
-	memcpy(np_indices, indices, sizeof(Index)*size);
-	// while(size--)
-	// 	*np_indices++ = *indices++;
+	if(size > 0){
+		Index* np_indices = (Index*)PyArray_DATA(np_arr);
+		memcpy(np_indices, indices, sizeof(Index)*size);
+	}
 
 	return np_arr;
 }
@@ -1245,12 +1244,12 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 	
 
 	// We allocate this much upfront because it will be used all almost surely
-	Index* edge_index_canvas = (Index*)malloc(sizeof(Index)*prev_size*power(samples_per_node, depth));
+	Node* edge_list_canvas = (Index*)malloc(2*sizeof(Node)*prev_size*power(samples_per_node, depth));
 
-	ASSERT(edge_index_canvas);
+	ASSERT(edge_list_canvas);
 	
 	for(uint layer=depth;layer>0; layer--){
-		Index cursor=0;
+		Index edge_list_cursor=0;
 
 		HashSet_init(&node_hash_set);
 
@@ -1271,7 +1270,9 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 					HashSet_add_node(&node_hash_set, pre_neighbor);
 					HashSet_add_node(&load_set, pre_neighbor);
 
-					edge_index_canvas[cursor++] = offset + i;
+					edge_list_canvas[2*edge_list_cursor] = pre_neighbor;
+					edge_list_canvas[2*edge_list_cursor+1] = dst_node;
+					edge_list_cursor++;
 				}
 			}
 			/*
@@ -1299,7 +1300,9 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 					HashSet_add_node(&node_hash_set, node_sample);
 					HashSet_add_node(&load_set, node_sample);
 
-					edge_index_canvas[cursor++] = offset + perm[rand_i];
+					edge_list_canvas[2*edge_list_cursor] = node_sample;
+					edge_list_canvas[2*edge_list_cursor+1] = dst_node;
+					edge_list_cursor++;
 
 					perm[rand_i]=perm[i];
 				}
@@ -1329,14 +1332,16 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 					HashSet_add_node(&load_set, node_sample);
 					
 
-					edge_index_canvas[cursor++] = offset + edge_index;
+					edge_list_canvas[2*edge_list_cursor] = node_sample;
+					edge_list_canvas[2*edge_list_cursor+1] = dst_node;
+					edge_list_cursor++;
 				}
 			}
 		}
 
 
 		
-		PyArrayObject* edge_indices = index_array_to_numpy(edge_index_canvas, cursor);
+		PyArrayObject* edge_indices = numpy_edge_list(edge_list_canvas, edge_list_cursor);
 		
 
 		PyArrayObject* new_layer = HashSet_to_numpy(&node_hash_set);
@@ -1359,7 +1364,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 	HashSet_free(&node_tracker);
 	HashSet_free(&load_set);
 	HashSet_free(&node_hash_set);
-	free(edge_index_canvas);
+	free(edge_list_canvas);
 
 	// while(target_nodes_references--)
 	// 	Py_DECREF(target_nodes);
@@ -1783,16 +1788,16 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 
 
 static PyMethodDef GMSamplersMethods[] = {
-	{"sample_nodewise", GMSamplers_sample_nodewise, METH_VARARGS, "Random sampling within a graph through multiple layers where each pre-neighborhood of a node in a layer gets sampled separately."},
+	{"c_sample_nodewise", GMSamplers_sample_nodewise, METH_VARARGS, "Random sampling within a graph through multiple layers where each pre-neighborhood of a node in a layer gets sampled separately."},
 	#ifdef Thread_Count_Arg
-	{"sample_nodewise_mt_static", GMSamplers_sample_nodewise_mt_static, METH_VARARGS, "Random sampling within a graph through multiple layers where each pre-neighborhood of a node in a layer gets sampled separately. Multi-threaded with static lock-free Hashsets"},
+	{"c_sample_nodewise_mt_static", GMSamplers_sample_nodewise_mt_static, METH_VARARGS, "Random sampling within a graph through multiple layers where each pre-neighborhood of a node in a layer gets sampled separately. Multi-threaded with static lock-free Hashsets"},
 	#endif
-	{"sample_layerwise_fully_connected", GMSamplers_sample_layerwise_fully_connected, METH_VARARGS, "Random sampling within a graph through multiple layers where the pre-neighborhood of a layer gets sampled jointly and the layers are fully connected."},
+	{"c_sample_layerwise_fully_connected", GMSamplers_sample_layerwise_fully_connected, METH_VARARGS, "Random sampling within a graph through multiple layers where the pre-neighborhood of a layer gets sampled jointly and the layers are fully connected."},
 	
 	// TODO: figure out how to sample without collecting all edges in a list first
-	{"sample_layerwise_randomly_connected", GMSamplers_sample_layerwise_randomly_connected, METH_VARARGS, "Random sampling within a graph through multiple layers where the pre-neighborhood of a layer gets sampled jointly, but only a random subset of the connections between layers is sampled."},
+	{"c_sample_layerwise_randomly_connected", GMSamplers_sample_layerwise_randomly_connected, METH_VARARGS, "Random sampling within a graph through multiple layers where the pre-neighborhood of a layer gets sampled jointly, but only a random subset of the connections between layers is sampled."},
 	
-	{"compute_edge_list", GMSamplers_compute_edge_list, METH_VARARGS, "Compute edge list from onset_div and duration_div."},
+	{"c_compute_edge_list", GMSamplers_compute_edge_list, METH_VARARGS, "Compute edge list from onset_div and duration_div."},
 	{"c_random_score_region", random_score_region, METH_VARARGS, "Samples a random region (integer interval) from a score graph"},
 	{"c_extend_score_region_via_neighbor_sampling", extend_score_region_via_neighbor_sampling, METH_VARARGS, "Given a score region, add samples from outside the region aquired via neighboorhood sampling"},
 	{"c_sample_neighbors_in_score_graph", sample_neighbors_in_score_graph, METH_VARARGS, "nodewise sampling of neighbors without pre-computed lookup table"},
