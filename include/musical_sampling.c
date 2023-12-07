@@ -57,8 +57,9 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 	Index region_start;
 	Index region_end;
 	Index samples_per_node;
+	int sample_rightmost;
 
-	if(!PyArg_ParseTuple(args, "OOOOIII", (PyObject**)&graph, (PyObject**)&np_onsets, (PyObject**)&np_durations, (PyObject**)&np_endtimes_cummax, (uint*)&region_start, (uint*)&region_end, (uint*)&samples_per_node)){
+	if(!PyArg_ParseTuple(args, "OOOOIIIp", (PyObject**)&graph, (PyObject**)&np_onsets, (PyObject**)&np_durations, (PyObject**)&np_endtimes_cummax, (uint*)&region_start, (uint*)&region_end, (uint*)&samples_per_node, &sample_rightmost)){
 		printf("If you don't provide proper arguments, you can't extend a score region via neighbor sampling.\nHow can you extend a score region via neighbor sampling if you don't provide proper arguments?\n");
 		return NULL;
 	}
@@ -200,7 +201,7 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 	}
 
 
-	if(region_end<=PyArray_SIZE(np_onsets)-1){
+	if(sample_rightmost && region_end<=PyArray_SIZE(np_onsets)-1){
 		HashSet_init(&samples);
 		edge_list_cursor = 0;
 
