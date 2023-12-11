@@ -188,7 +188,8 @@ def sample_neighbors_in_score_graph(note_array, depth, samples_per_node, targets
 	total_samples : numpy.ndarray
 		the union of samples_per_layer
 	"""
-	assert len(targets)>0
+	if len(targets)==0:
+		return [],[],torch.empty(0,dtype=torch.long)
 
 	onsets = note_array["onset_div"].astype(numpy.int32)
 	durations = note_array["duration_div"].astype(numpy.int32)
@@ -229,6 +230,7 @@ def sample_preneighbors_within_region(cgraph, region, samples_per_node=10):
 	if region_start>=region_end:
 		raise ValueError("invalid region given")
 	samples, edges = c_sample_preneighbors_within_region(cgraph, region_start, region_end, samples_per_node)
+	
 	# move to torch tensors
 	samples = torch.from_numpy(samples)
 	edges = torch.from_numpy(edges).long()

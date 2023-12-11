@@ -10,7 +10,6 @@ torch.cuda.manual_seed(42)
 torch.backends.cudnn.deterministic = True
 
 
-
 num_graphs = 20
 max_nodes = 500
 min_nodes = 100

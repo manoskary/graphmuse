@@ -150,12 +150,18 @@ class MuseDataloader(DataLoader):
                 # Sample rightmost node-wise by num layers (because of reverse edges missing)
                 right_layers, edges_between_right_layers, total_right_samples = csamplers.sample_neighbors_in_score_graph(random_graph.note_array, self.num_layers-2, self.samples_per_node, right_extension.numpy())
             else:
-                right_layers, edges_between_right_layers = [], []
+                right_layers, edges_between_right_layers, total_right_samples = [], [], torch.empty(0)
 
+            cat_list = (edges_within_region, left_edges, right_edges)
+
+            # filtering out edge types
+            cat_list = [e[:2] for e in cat_list]
 
             # Translate edges to subgraph indices (do this on GPU when available).
-            subgraph_edge_index = torch.cat(
-                (edges_within_region, left_edges, right_edges, edges_between_right_layers[-1], edges_between_left_layers[-1]), dim=1)
+            subgraph_edge_index = torch.cat(cat_list, dim=1)
+
+
+
             sampled_nodes = torch.cat((torch.arange(region[0], region[1]), sampled_nodes_first_layer, total_left_samples, total_right_samples)).to(self.device)
             new_mapping = torch.arange(sampled_nodes.shape[0], device=self.device)
             nodes_remap = torch.empty_like(torch.zeros(random_graph.x.shape[0]), dtype=int).to(self.device)
