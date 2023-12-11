@@ -82,7 +82,7 @@ def random_score_region(note_array, budget):
 	if len(onsets) - unique_onset_indices[-1] > budget and (numpy.diff(unique_onset_indices)>budget).all():
 		raise ValueError("impossible to sample a score region with the given budget within given note array")
 
-	return c_random_score_region(unique_onset_indices, budget)
+	return c_random_score_region(onsets,unique_onset_indices, budget)
 
 
 def extend_score_region_via_neighbor_sampling(cgraph, note_array, region, samples_per_node, sample_rightmost=True):

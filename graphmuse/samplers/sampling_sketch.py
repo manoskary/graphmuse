@@ -145,11 +145,11 @@ class MuseDataloader(DataLoader):
             (left_extension, left_edges), (right_extension, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(random_graph.c_graph, random_graph.note_array, region, self.samples_per_node, self.sample_rightmost)
 
             # Sample leftmost typical node-wise by num layers excluding the last layer which was sampled above
-            left_layers, edges_between_left_layers, _, total_left_samples = csamplers.sample_nodewise(random_graph.c_graph, self.num_layers-2, self.samples_per_node, left_extension)
+            left_layers, edges_between_left_layers, _, total_left_samples = csamplers.sample_nodewise(random_graph.c_graph, self.num_layers-2, self.samples_per_node, left_extension.numpy())
 
             if self.sample_rightmost:
                 # Sample rightmost node-wise by num layers (because of reverse edges missing)
-                right_layers, edges_between_right_layers, total_right_samples = csamplers.sample_neighbors_in_score_graph(random_graph.note_array, self.num_layers-2, self.samples_per_node, right_extension)
+                right_layers, edges_between_right_layers, total_right_samples = csamplers.sample_neighbors_in_score_graph(random_graph.note_array, self.num_layers-2, self.samples_per_node, right_extension.numpy())
             else:
                 right_layers, edges_between_right_layers = [], []
             edges_between_layers = torch.cat((left_edges, right_edges, edges_between_right_layers, edges_between_left_layers), dim=1)

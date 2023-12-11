@@ -76,7 +76,7 @@ print("\n----------------------\n")
 
 
 
-right_right_ext, right_right_edges = sam.sample_neighbors_in_score_graph(note_array, 1, 3, right_ext)
+right_right_ext, right_right_edges,_ = sam.sample_neighbors_in_score_graph(note_array, 1, 3, right_ext.numpy())
 
 print(right_right_ext)
 print()

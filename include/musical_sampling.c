@@ -75,7 +75,7 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 	PyArrayObject* right_edges;
 
 	Index edge_list_size = region_end-region_start;
-	Node* edge_list = (Node*)malloc(2*sizeof(Node)*edge_list_size);
+	Node* edge_list = (Node*)malloc(3*sizeof(Node)*edge_list_size);
 	ASSERT(edge_list);
 	Index edge_list_cursor;
 	
@@ -117,11 +117,11 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 					new_size = (Index)(new_size*1.5f);
 
 				Node* tmp = edge_list;
-				edge_list = (Node*)malloc(2*sizeof(Node)*new_size);
+				edge_list = (Node*)malloc(3*sizeof(Node)*new_size);
 
 				ASSERT(edge_list);
 
-				memcpy(edge_list, tmp, 2*sizeof(Node)*edge_list_size);
+				memcpy(edge_list, tmp, 3*sizeof(Node)*edge_list_size);
 
 				free(tmp);
 				edge_list_size = new_size;
@@ -131,8 +131,9 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 				for(Index i=0; i<marker; i++){
 					Node pre_neighbor = src_node_at(graph, offset + i);
 					HashSet_add_node(&samples, pre_neighbor);
-					edge_list[2*edge_list_cursor]=pre_neighbor;
-					edge_list[2*edge_list_cursor+1]=Index_To_Node(j);
+					edge_list[3*edge_list_cursor]=pre_neighbor;
+					edge_list[3*edge_list_cursor+1]=Index_To_Node(j);
+					edge_list[3*edge_list_cursor+2]=edge_type_at(graph, offset + i);
 					edge_list_cursor++;
 				}
 			}
@@ -144,7 +145,7 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 				if this threshold is reached, random subset is sampled via random permutation
 				this is viable since memory waste is at most 25% (for temporary storage)
 			*/
-			else if(samples_per_node > (uint)(0.75*marker)){
+			else if(samples_per_node > (Index)(0.75*marker)){
 				Index* perm = (Index*)malloc(sizeof(Index)*marker);
 
 				ASSERT(perm);
@@ -156,12 +157,13 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 				for(Index i=0; i<samples_per_node; i++){
 					Index rand_i = i + rand()%(marker-i);
 
-					Node node_sample = src_node_at(graph, offset + perm[rand_i]);
+					Node pre_neighbor = src_node_at(graph, offset + perm[rand_i]);
 
-					HashSet_add_node(&samples, node_sample);
+					HashSet_add_node(&samples, pre_neighbor);
 
-					edge_list[2*edge_list_cursor]=node_sample;
-					edge_list[2*edge_list_cursor+1]=Index_To_Node(j);
+					edge_list[3*edge_list_cursor]=pre_neighbor;
+					edge_list[3*edge_list_cursor+1]=Index_To_Node(j);
+					edge_list[3*edge_list_cursor+2]=edge_type_at(graph, offset + perm[rand_i]);
 					edge_list_cursor++;
 
 					perm[rand_i]=perm[i];
@@ -172,22 +174,23 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 			else{
 				HashSet_init(&node_tracker);
 
-				for(uint sample=0; sample<samples_per_node; sample++){
+				for(Index sample=0; sample<samples_per_node; sample++){
 					Index edge_index;
 
-					Node node_sample;
+					Node pre_neighbor;
 
 					for(;;){
 						edge_index = rand()%marker;
-						node_sample = src_node_at(graph, offset + edge_index);
-						if(HashSet_add_node(&node_tracker, node_sample))
+						pre_neighbor = src_node_at(graph, offset + edge_index);
+						if(HashSet_add_node(&node_tracker, pre_neighbor))
 							break;
 					}
 
-					HashSet_add_node(&samples, node_sample);
+					HashSet_add_node(&samples, pre_neighbor);
 					
-					edge_list[2*edge_list_cursor]=node_sample;
-					edge_list[2*edge_list_cursor+1]=Index_To_Node(j);
+					edge_list[3*edge_list_cursor]=pre_neighbor;
+					edge_list[3*edge_list_cursor+1]=Index_To_Node(j);
+					edge_list[3*edge_list_cursor+2]=edge_type_at(graph, offset + edge_index);
 					edge_list_cursor++;
 				}
 			}
@@ -226,11 +229,11 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 					new_size = (Index)(new_size*1.5f);
 
 				Node* tmp = edge_list;
-				edge_list = (Node*)malloc(2*sizeof(Node)*new_size);
+				edge_list = (Node*)malloc(3*sizeof(Node)*new_size);
 
 				ASSERT(edge_list);
 
-				memcpy(edge_list, tmp, 2*sizeof(Node)*edge_list_size);
+				memcpy(edge_list, tmp, 3*sizeof(Node)*edge_list_size);
 
 				free(tmp);
 				edge_list_size = new_size;
@@ -239,8 +242,8 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 			if(marker-region_end <= samples_per_node){
 				for(Node j=region_end; j<marker; j++){
 					HashSet_add_node(&samples, j);
-					edge_list[2*edge_list_cursor]=Index_To_Node(j);
-					edge_list[2*edge_list_cursor+1]=Index_To_Node((Index)i);
+					edge_list[3*edge_list_cursor]=Index_To_Node(j);
+					edge_list[3*edge_list_cursor+1]=Index_To_Node((Index)i);
 					edge_list_cursor++;
 				}
 			}
@@ -252,7 +255,7 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 				if this threshold is reached, random subset is sampled via random permutation
 				this is viable since memory waste is at most 25% (for temporary storage)
 			*/
-			else if(samples_per_node > (uint)(0.75*(marker-region_end))){
+			else if(samples_per_node > (Index)(0.75*(marker-region_end))){
 				Node* perm = (Node*)malloc(sizeof(Node)*(marker-region_end));
 
 				ASSERT(perm);
@@ -280,7 +283,7 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 			else{
 				HashSet_init(&node_tracker);
 
-				for(uint sample=0; sample<samples_per_node; sample++){
+				for(Index sample=0; sample<samples_per_node; sample++){
 					Node node_sample;
 
 					for(;;){
@@ -425,7 +428,7 @@ static PyObject* sample_neighbors_in_score_graph(PyObject* csamplers, PyObject* 
 				if this threshold is reached, random subset is sampled via random permutation
 				this is viable since memory waste is at most 25% (for temporary storage)
 			*/
-			else if(samples_per_node > (uint)(0.75*neighbor_count)){
+			else if(samples_per_node > (Index)(0.75*neighbor_count)){
 				Node* perm = (Node*)malloc(sizeof(Node)*neighbor_count);
 
 				ASSERT(perm);
@@ -454,7 +457,7 @@ static PyObject* sample_neighbors_in_score_graph(PyObject* csamplers, PyObject* 
 			else{
 				HashSet_init(&node_tracker);
 
-				for(uint sample=0; sample<samples_per_node; sample++){
+				for(Index sample=0; sample<samples_per_node; sample++){
 					Node j;
 
 					for(;;){
@@ -556,7 +559,7 @@ static PyObject* sample_preneighbors_within_region(PyObject* csamplers, PyObject
 			if this threshold is reached, random subset is sampled via random permutation
 			this is viable since memory waste is at most 25% (for temporary storage)
 		*/
-		else if(samples_per_node > (uint)(0.75*intersection_count)){
+		else if(samples_per_node > (Index)(0.75*intersection_count)){
 			Node* perm = (Node*)malloc(sizeof(Node)*intersection_count);
 
 			ASSERT(perm);
@@ -586,7 +589,7 @@ static PyObject* sample_preneighbors_within_region(PyObject* csamplers, PyObject
 		else{
 			HashSet_init(&node_tracker);
 
-			for(uint sample=0; sample<samples_per_node; sample++){
+			for(Index sample=0; sample<samples_per_node; sample++){
 				Node i;
 
 				for(;;){

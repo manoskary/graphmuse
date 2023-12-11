@@ -26,11 +26,6 @@ static PyObject* Graph_new(PyTypeObject* type, PyObject* args, PyObject* kwds){
 		return NULL;
 	}
 
-	
-
-	// TODO: check edges.dtype in {np.uint32, np.uint64}
-
-
 	Graph* graph = (Graph*) type->tp_alloc(type, 0);
 	
 	if(graph!=NULL){
@@ -69,7 +64,6 @@ static int Graph_init(Graph* graph, PyObject* args, PyObject* kwds){
 	graph->node_count = node_count;
 
 	graph->edge_list = edges;
-	//graph->edge_types = edge_types;
 
 	Py_INCREF(edges);
 
@@ -105,6 +99,11 @@ static Node dst_node_at(Graph* g, Index i){
 	return *((Node*)PyArray_GETPTR2(g->edge_list, 1, i));
 }
 
+static EdgeType edge_type_at(Graph* g, Index i){
+	ASSERT(i < g->pre_neighbor_offsets[g->node_count]);
+	return *((EdgeType*)PyArray_GETPTR2(g->edge_list, 2, i));
+}
+
 static PyObject* Graph_print(Graph* graph, PyObject *Py_UNUSED(ignored)){
 	for(Index i=0;i<graph->node_count;i++){
 		Index c = graph->pre_neighbor_offsets[i+1]-graph->pre_neighbor_offsets[i];
@@ -130,9 +129,9 @@ static PyObject* Graph_preneighborhood_count(Graph* graph, PyObject* args){
 	return PyLong_FromIndex(pre_neighbor_count);
 }
 
-static PyObject* Graph_edge_list(Graph* graph, void* closure){
-	return (PyObject*)graph->edge_list;
-}
+// static PyObject* Graph_edge_list(Graph* graph, void* closure){
+// 	return (PyObject*)graph->edge_list;
+// }
 
 static PyMethodDef Graph_methods[] = {
 	{"print", (PyCFunction)Graph_print, METH_NOARGS, "print the graph"},
@@ -140,10 +139,10 @@ static PyMethodDef Graph_methods[] = {
 	{NULL}
 };
 
-static PyGetSetDef Graph_properties[] = {
-	{"edge_list", Graph_edge_list, NULL, "getter for underlying edge list of Graph", NULL},
-	NULL
-};
+// static PyGetSetDef Graph_properties[] = {
+// 	{"edge_list", Graph_edge_list, NULL, "getter for underlying edge list of Graph", NULL},
+// 	NULL
+// };
 
 static PyTypeObject GraphType = {
 	PyVarObject_HEAD_INIT(NULL, 0)

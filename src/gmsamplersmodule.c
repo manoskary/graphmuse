@@ -13,9 +13,6 @@
 #define MACRO_MAX(a,b) ((a)<(b))? (b) : (a)
 #define MACRO_MIN(a,b) ((a)>=(b))? (b) : (a)
 
-typedef uint32_t uint;
-typedef uint32_t uint32;
-typedef uint64_t uint64;
 
 // these here are just used as indirection so that code can be compiled differently more easily
 typedef int32_t Int;
@@ -25,24 +22,23 @@ typedef Node Index;
 #define PyLong_FromIndex PyLong_FromUnsignedLong
 
 typedef Node Key;
-typedef uint64_t Value;
 
 #define Node_Eqv_In_Numpy NPY_INT32
 #define Index_Eqv_In_Numpy Node_Eqv_In_Numpy
 #define Key_Eqv_In_Numpy Node_Eqv_In_Numpy
-#define EType_Eqv_In_Numpy NPY_UINT8
+#define EType_Eqv_In_Numpy Node_Eqv_In_Numpy
 
-typedef uint8_t EdgeType;
-#define Onset_Eq (uint8_t)0
-#define Onset_End_Eq (uint8_t)1
-#define Inbetween (uint8_t)2
-#define Closest_End (uint8_t)3
+typedef Node EdgeType;
+#define Onset (0)
+#define Consecutive (1)
+#define During (2)
+#define Rest (3)
 
 #define Node_To_Index(n) ((Index)(n))
 #define Index_To_Node(i) ((Node)(i))
 
-static uint64 power(uint32 base, uint32 exponent){
-	uint64 p = 1;
+static Index power(Index base, Index exponent){
+	Index p = 1;
 
 	while(exponent--)
 		p*=base;
@@ -57,16 +53,16 @@ static PyArrayObject* new_node_numpy(Index size){
 }
 
 static PyArrayObject* numpy_edge_list(Node* edge_list, Index edge_list_size){
-	const npy_intp dims[2] = {2,edge_list_size};
+	const npy_intp dims[2] = {3,edge_list_size};
 
-	const npy_intp strides[2] = {sizeof(Node), 2*sizeof(Node)};
+	const npy_intp strides[2] = {sizeof(Node), 3*sizeof(Node)};
 
 	PyTypeObject* subtype = &PyArray_Type;
 
 	PyArrayObject* result = (PyArrayObject*)PyArray_New(subtype, 2, dims, Node_Eqv_In_Numpy, strides, NULL, 0, NPY_ARRAY_C_CONTIGUOUS, NULL);
 
 	if(edge_list_size > 0)
-		memcpy(PyArray_DATA(result), edge_list, 2*sizeof(Node)*edge_list_size);
+		memcpy(PyArray_DATA(result), edge_list, 3*sizeof(Node)*edge_list_size);
 
 	return result;
 }
@@ -413,7 +409,7 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 
 		// Node* src = (Node*)PyArray_GETPTR2(edge_list, 0, neighbor_offsets[i]);
 		// Node* dst = (Node*)PyArray_GETPTR2(edge_list, 1, neighbor_offsets[i]);
-		EdgeType* types = (EdgeType*)PyArray_DATA(edge_types) + neighbor_offsets[i];
+		EdgeType* types = ((EdgeType*)PyArray_DATA(edge_types)) + neighbor_offsets[i];
 
 		Int eq_boundary = ((Int)i)-1;
 
@@ -434,7 +430,7 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 
 			// src[cursor] = Index_To_Node(i);
 			// dst[cursor] = Index_To_Node(j);
-			types[cursor] = Onset_Eq;
+			types[cursor] = Onset;
 
 			cursor+= (Index)cond1;
 
@@ -446,7 +442,7 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 
 			// src[cursor] = Index_To_Node(i);
 			// dst[cursor] = Index_To_Node(j);
-			types[cursor] = Onset_End_Eq;
+			types[cursor] = Consecutive;
 
 			cursor+= (Index)cond3;
 
@@ -470,7 +466,7 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 
 			// src[cursor] = Index_To_Node(i);
 			// dst[cursor] = Index_To_Node(j);
-			types[cursor] = Inbetween;
+			types[cursor] = During;
 
 			
 
@@ -492,7 +488,7 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 
 				// src[cursor] = Index_To_Node(i);
 				// dst[cursor] = Index_To_Node(j);
-				types[cursor] = Closest_End;
+				types[cursor] = Rest;
 
 				bool
 					cond4 = (onset_div[j] == closest_from_above);
@@ -523,7 +519,7 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 
 				// src[cursor] = Index_To_Node(i);
 				// dst[cursor] = Index_To_Node(j);
-				types[cursor] = Onset_End_Eq;
+				types[cursor] = Consecutive;
 
 				cursor+= (Index)cond3;
 
@@ -535,7 +531,7 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 
 				// src[cursor] = Index_To_Node(i);
 				// dst[cursor] = Index_To_Node(j);
-				types[cursor] = Onset_Eq;
+				types[cursor] = Onset;
 
 				cursor+= (Index)cond1;
 
@@ -679,7 +675,7 @@ static PyObject* GMSamplers_compute_edge_list(PyObject* csamplers, PyObject* arg
 
 
 
-static PyArrayObject* index_array_to_numpy(Index* indices, uint size){
+static PyArrayObject* index_array_to_numpy(Index* indices, Index size){
 	const npy_intp dims = size;
 	PyArrayObject* np_arr = (PyArrayObject*)PyArray_SimpleNew(1, &dims, Index_Eqv_In_Numpy);
 
@@ -1199,7 +1195,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 
 		Node* init_nodes = (Node*)PyArray_DATA(init_layer);
 
-		for(uint sample=0; sample<samples_per_node; sample++){
+		for(Index sample=0; sample<samples_per_node; sample++){
 			Node node_sample;
 
 			for(;;){
@@ -1237,7 +1233,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 
 		Node* raw_target_nodes = PyArray_DATA(target_nodes);
 
-		for(uint n = 0 ; n < prev_size; n++){
+		for(Index n = 0 ; n < prev_size; n++){
 			HashSet_add_node(&load_set, raw_target_nodes[n]);
 			HashSet_add_node(&total_samples, raw_target_nodes[n]);
 		}
@@ -1254,7 +1250,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 	
 
 	// We allocate this much upfront because it will be used all almost surely
-	Node* edge_list_canvas = (Index*)malloc(2*sizeof(Node)*prev_size*power(samples_per_node, depth));
+	Node* edge_list_canvas = (Index*)malloc(3*sizeof(Node)*prev_size*power(samples_per_node, depth));
 
 	ASSERT(edge_list_canvas);
 	
@@ -1282,8 +1278,9 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 
 					HashSet_add_node(&total_samples, pre_neighbor);
 
-					edge_list_canvas[2*edge_list_cursor] = pre_neighbor;
-					edge_list_canvas[2*edge_list_cursor+1] = dst_node;
+					edge_list_canvas[3*edge_list_cursor] = pre_neighbor;
+					edge_list_canvas[3*edge_list_cursor+1] = dst_node;
+					edge_list_canvas[3*edge_list_cursor+2] = edge_type_at(graph, offset+i);
 					edge_list_cursor++;
 				}
 			}
@@ -1295,7 +1292,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 				if this threshold is reached, random subset is sampled via random permutation
 				this is viable since memory waste is at most 25% (for temporary storage)
 			*/
-			else if(samples_per_node > (uint)(0.75*pre_neighbor_count)){
+			else if(samples_per_node > (Index)(0.75*pre_neighbor_count)){
 				Index* perm = (Index*)malloc(sizeof(Index)*pre_neighbor_count);
 
 				ASSERT(perm);
@@ -1307,14 +1304,15 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 				for(Index i=0; i<samples_per_node; i++){
 					Index rand_i = i + rand()%(pre_neighbor_count-i);
 
-					Node node_sample = src_node_at(graph, offset + perm[rand_i]);
+					Node pre_neighbor = src_node_at(graph, offset + perm[rand_i]);
 
-					HashSet_add_node(&node_hash_set, node_sample);
-					HashSet_add_node(&load_set, node_sample);
-					HashSet_add_node(&total_samples, node_sample);
+					HashSet_add_node(&node_hash_set, pre_neighbor);
+					HashSet_add_node(&load_set, pre_neighbor);
+					HashSet_add_node(&total_samples, pre_neighbor);
 
-					edge_list_canvas[2*edge_list_cursor] = node_sample;
-					edge_list_canvas[2*edge_list_cursor+1] = dst_node;
+					edge_list_canvas[3*edge_list_cursor] = pre_neighbor;
+					edge_list_canvas[3*edge_list_cursor+1] = dst_node;
+					edge_list_canvas[3*edge_list_cursor+2] = edge_type_at(graph, offset + perm[rand_i]);
 					edge_list_cursor++;
 
 					perm[rand_i]=perm[i];
@@ -1325,29 +1323,26 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 			else{
 				HashSet_init(&node_tracker);
 
-				for(uint sample=0; sample<samples_per_node; sample++){
+				for(Index sample=0; sample<samples_per_node; sample++){
 					Index edge_index;
 
-					Node node_sample;
-
-					uint attempts=1;
+					Node pre_neighbor;
 
 					for(;;){
 						edge_index = rand()%pre_neighbor_count;
-						node_sample = src_node_at(graph, offset + edge_index);
-						if(HashSet_add_node(&node_tracker, node_sample))
+						pre_neighbor = src_node_at(graph, offset + edge_index);
+						if(HashSet_add_node(&node_tracker, pre_neighbor))
 							break;
-
-						attempts++;
 					}
 
-					HashSet_add_node(&node_hash_set, node_sample);
-					HashSet_add_node(&load_set, node_sample);
-					HashSet_add_node(&total_samples, node_sample);
+					HashSet_add_node(&node_hash_set, pre_neighbor);
+					HashSet_add_node(&load_set, pre_neighbor);
+					HashSet_add_node(&total_samples, pre_neighbor);
 					
 
-					edge_list_canvas[2*edge_list_cursor] = node_sample;
-					edge_list_canvas[2*edge_list_cursor+1] = dst_node;
+					edge_list_canvas[3*edge_list_cursor] = pre_neighbor;
+					edge_list_canvas[3*edge_list_cursor+1] = dst_node;
+					edge_list_canvas[3*edge_list_cursor+2] = edge_type_at(graph, offset + edge_index);
 					edge_list_cursor++;
 				}
 			}
