@@ -149,9 +149,9 @@ def extend_score_region_via_neighbor_sampling(cgraph, note_array, region, sample
 
 	# move to torch tensors
 	left_nodes = torch.from_numpy(left_nodes)
-	left_edges = torch.from_numpy(left_edges)
+	left_edges = torch.from_numpy(left_edges).long()
 	right_nodes = torch.from_numpy(right_nodes)
-	right_edges = torch.from_numpy(right_edges)
+	right_edges = torch.from_numpy(right_edges).long()
 
 	return (left_nodes, left_edges), (right_nodes, right_edges)
 
@@ -195,7 +195,7 @@ def sample_neighbors_in_score_graph(note_array, depth, samples_per_node, targets
 	samples_per_layer, edges_between_layers, total_samples = c_sample_neighbors_in_score_graph(onsets, durations, depth, samples_per_node, targets)
 	# move to torch tensors
 	samples_per_layer = [torch.from_numpy(layer) for layer in samples_per_layer]
-	edges_between_layers = [torch.from_numpy(edges) for edges in edges_between_layers]
+	edges_between_layers = [torch.from_numpy(edges).long() for edges in edges_between_layers]
 	total_samples = torch.from_numpy(total_samples)
 	return samples_per_layer, edges_between_layers, total_samples
 
@@ -231,5 +231,5 @@ def sample_preneighbors_within_region(cgraph, region, samples_per_node=10):
 	samples, edges = c_sample_preneighbors_within_region(cgraph, region_start, region_end, samples_per_node)
 	# move to torch tensors
 	samples = torch.from_numpy(samples)
-	edges = torch.from_numpy(edges)
+	edges = torch.from_numpy(edges).long()
 	return samples, edges

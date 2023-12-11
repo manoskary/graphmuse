@@ -102,10 +102,9 @@ class MuseDataloader(DataLoader):
     num_workers : int
         The number of workers.
     """
-    def __init__(self, graphs, subgraph_size, subgraphs, num_layers=3, samples_per_node=3, batch_size=1, num_workers=0, sample_rightmost=False, device="cpu"):
+    def __init__(self, graphs, subgraph_size, num_layers=3, samples_per_node=3, batch_size=1, num_workers=0, sample_rightmost=False, device="cpu"):
         self.graphs = graphs
         self.subgraph_size = subgraph_size
-        self.subgraphs = subgraphs
         self.device = device
         self.sample_rightmost = sample_rightmost
         self.num_layers = num_layers # This is for a later version with node-wise sampling
@@ -120,10 +119,10 @@ class MuseDataloader(DataLoader):
         self.onset_count = {}
         dataset = range(len(graphs))
         batch_sampler = SubgraphCreationSampler(graphs, max_subgraph_size=subgraph_size, drop_last=False, batch_size=batch_size)
-        super().__init__(self, batch_sampler=batch_sampler, num_workers=num_workers, collate_fn=self.collate_graph_fn)
+        super().__init__(dataset=dataset, batch_sampler=batch_sampler, num_workers=num_workers, collate_fn=self.collate_graph_fn)
 
     def collate_graph_fn(self, batch):
-        graphlist = self.graphs[batch]
+        graphlist = [self.graphs[idx] for idx in batch]
         out = self.sample_from_graphlist(graphlist)
         return out
 
@@ -152,27 +151,25 @@ class MuseDataloader(DataLoader):
                 right_layers, edges_between_right_layers, total_right_samples = csamplers.sample_neighbors_in_score_graph(random_graph.note_array, self.num_layers-2, self.samples_per_node, right_extension.numpy())
             else:
                 right_layers, edges_between_right_layers = [], []
-            edges_between_layers = torch.cat((left_edges, right_edges, edges_between_right_layers, edges_between_left_layers), dim=1)
-            layers = torch.cat((torch.arange(region[0], region[1]), left_layers, right_layers))
-            subgraph_samples.append((layers, edges_between_layers))
+
 
             # Translate edges to subgraph indices (do this on GPU when available).
-            subgraph_edge_index = torch.cat((edges_within_region, edges_between_layers), dim=1).to(self.device)
+            subgraph_edge_index = torch.cat(
+                (edges_within_region, left_edges, right_edges, edges_between_right_layers[-1], edges_between_left_layers[-1]), dim=1)
             sampled_nodes = torch.cat((torch.arange(region[0], region[1]), sampled_nodes_first_layer, total_left_samples, total_right_samples)).to(self.device)
             new_mapping = torch.arange(sampled_nodes.shape[0], device=self.device)
-            nodes_remap = torch.empty_like(random_graph.x.shape[0]).to(self.device)
+            nodes_remap = torch.empty_like(torch.zeros(random_graph.x.shape[0]), dtype=int).to(self.device)
             nodes_remap[sampled_nodes] = new_mapping
             # Map the indices of the subgraph to the indices of the original graph
             new_edge_index = nodes_remap[subgraph_edge_index]
             # Create a PyG graph
             subgraph_samples.append(
-                Data(x=random_graph.x[sampled_nodes].to(self.device), edge_index=new_edge_index)).to(self.device)
+                Data(x=random_graph.x[sampled_nodes].to(self.device), edge_index=new_edge_index).to(self.device))
 
         # Join all subgraphs together
-        batch = Batch().from_datalist(subgraph_samples)
+        batch = Batch.from_data_list(subgraph_samples)
 
         return batch
 
-    def __getitem__(self, idx):
-        return self.sample_from_graphlist([self.graphs[idx]])
-
+    def __iter__(self):
+        return super().__iter__()
