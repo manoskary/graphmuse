@@ -1194,6 +1194,9 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 		HashSet_new(&load_set, samples_per_node);
 		HashSet_init(&load_set);
 
+		HashSet_new(&total_samples, samples_per_node);
+		HashSet_init(&total_samples);
+
 		Node* init_nodes = (Node*)PyArray_DATA(init_layer);
 
 		for(uint sample=0; sample<samples_per_node; sample++){
@@ -1204,6 +1207,8 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 				if(HashSet_add_node(&load_set, node_sample))
 					break;
 			}
+
+			HashSet_add_node(&total_samples, node_sample);
 			
 			*init_nodes++ = node_sample;
 		}
@@ -1227,10 +1232,15 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 		HashSet_new(&load_set, prev_size);
 		HashSet_init(&load_set);
 
+		HashSet_new(&total_samples, samples_per_node);
+		HashSet_init(&total_samples);
+
 		Node* raw_target_nodes = PyArray_DATA(target_nodes);
 
-		for(uint n = 0 ; n < prev_size; n++)
-			HashSet_add_node(&load_set, *raw_target_nodes++);
+		for(uint n = 0 ; n < prev_size; n++){
+			HashSet_add_node(&load_set, raw_target_nodes[n]);
+			HashSet_add_node(&total_samples, raw_target_nodes[n]);
+		}
 
 		prev_layer = target_nodes;
 	}
@@ -1270,6 +1280,8 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 					HashSet_add_node(&node_hash_set, pre_neighbor);
 					HashSet_add_node(&load_set, pre_neighbor);
 
+					HashSet_add_node(&total_samples, pre_neighbor);
+
 					edge_list_canvas[2*edge_list_cursor] = pre_neighbor;
 					edge_list_canvas[2*edge_list_cursor+1] = dst_node;
 					edge_list_cursor++;
@@ -1299,6 +1311,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 
 					HashSet_add_node(&node_hash_set, node_sample);
 					HashSet_add_node(&load_set, node_sample);
+					HashSet_add_node(&total_samples, node_sample);
 
 					edge_list_canvas[2*edge_list_cursor] = node_sample;
 					edge_list_canvas[2*edge_list_cursor+1] = dst_node;
@@ -1330,6 +1343,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 
 					HashSet_add_node(&node_hash_set, node_sample);
 					HashSet_add_node(&load_set, node_sample);
+					HashSet_add_node(&total_samples, node_sample);
 					
 
 					edge_list_canvas[2*edge_list_cursor] = node_sample;
@@ -1361,6 +1375,9 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 		PyList_SET_ITEM(edge_indices_between_layers, layer-1, (PyObject*)edge_indices);
 	}
 
+	PyArrayObject* np_total_samples = HashSet_to_numpy(&total_samples);
+
+    HashSet_free(&total_samples);
 	HashSet_free(&node_tracker);
 	HashSet_free(&load_set);
 	HashSet_free(&node_hash_set);
@@ -1369,7 +1386,7 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 	// while(target_nodes_references--)
 	// 	Py_DECREF(target_nodes);
 
-	return PyTuple_Pack(3, samples_per_layer, edge_indices_between_layers, load_per_layer);
+	return PyTuple_Pack(4, samples_per_layer, edge_indices_between_layers, load_per_layer, np_total_samples);
 }
 
 static Index sum_preneighbor_counts(Node* prev_layer_nodes, Index prev_layer_nodes_count, Index* pre_neighbor_offsets){
