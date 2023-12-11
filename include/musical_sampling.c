@@ -349,6 +349,10 @@ static PyObject* sample_neighbors_in_score_graph(PyObject* csamplers, PyObject* 
 	HashSet node_hash_set;
 	HashSet_new(&node_hash_set, (Index)PyArray_SIZE(prev_layer));
 
+	HashSet total_samples;
+	HashSet_new(&total_samples, (Index)PyArray_SIZE(prev_layer));
+	HashSet_init(&total_samples);
+
 	HashSet node_tracker;
 	HashSet_new(&node_tracker, samples_per_node);
 
@@ -406,6 +410,7 @@ static PyObject* sample_neighbors_in_score_graph(PyObject* csamplers, PyObject* 
 			if(neighbor_count <= samples_per_node){
 				for(Index j=lower_bound; j<upper_bound; j++){
 					HashSet_add_node(&node_hash_set, j);
+					HashSet_add_node(&total_samples, j);
 
 					edge_list[2*edge_list_cursor]=j;
 					edge_list[2*edge_list_cursor+1]=i;
@@ -435,6 +440,7 @@ static PyObject* sample_neighbors_in_score_graph(PyObject* csamplers, PyObject* 
 					Node j = perm[rand_ix];
 
 					HashSet_add_node(&node_hash_set, j);
+					HashSet_add_node(&total_samples, j);
 
 					edge_list[2*edge_list_cursor]=j;
 					edge_list[2*edge_list_cursor+1]=i;
@@ -458,6 +464,7 @@ static PyObject* sample_neighbors_in_score_graph(PyObject* csamplers, PyObject* 
 					}
 
 					HashSet_add_node(&node_hash_set, j);
+					HashSet_add_node(&total_samples, j);
 					
 
 					edge_list[2*edge_list_cursor]=j;
@@ -480,11 +487,14 @@ static PyObject* sample_neighbors_in_score_graph(PyObject* csamplers, PyObject* 
 		PyList_SET_ITEM(edges_between_layers, layer-1, (PyObject*)edges);
 	}
 
+	PyArrayObject* np_total_samples = HashSet_to_numpy(&total_samples);
+
+	HashSet_free(&total_samples);
 	HashSet_free(&node_tracker);
 	HashSet_free(&node_hash_set);
 	free(edge_list);
 
-	return PyTuple_Pack(2, samples_per_layer, edges_between_layers);
+	return PyTuple_Pack(3, samples_per_layer, edges_between_layers, np_total_samples);
 }
 
 static PyObject* sample_preneighbors_within_region(PyObject* csamplers, PyObject* args){

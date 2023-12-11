@@ -184,17 +184,20 @@ def sample_neighbors_in_score_graph(note_array, depth, samples_per_node, targets
 	samples_per_layer: PyList(type=np.ndarray, length=depth+1)
 		List of numpy arrays of nodes (called layers) where the last layer corresponds to 'targets' and each n-th layer which isn't the last is a subset of the pre-neighborhood of the n+1-th layer
 	edges_between_layers: PyList(type=np.ndarray(2, N), length=depth)
-		List of numpy arrays of edges which show how 2 consecutive layers in samples_per_layer are connected 
+		List of numpy arrays of edges which show how 2 consecutive layers in samples_per_layer are connected
+	total_samples : numpy.ndarray
+		the union of samples_per_layer
 	"""
 	assert len(targets)>0
 
 	onsets = note_array["onset_div"].astype(numpy.int32)
 	durations = note_array["duration_div"].astype(numpy.int32)
-	samples_per_layer, edges_between_layers = c_sample_neighbors_in_score_graph(onsets, durations, depth, samples_per_node, targets)
+	samples_per_layer, edges_between_layers, total_samples = c_sample_neighbors_in_score_graph(onsets, durations, depth, samples_per_node, targets)
 	# move to torch tensors
 	samples_per_layer = [torch.from_numpy(layer) for layer in samples_per_layer]
 	edges_between_layers = [torch.from_numpy(edges) for edges in edges_between_layers]
-	return samples_per_layer, edges_between_layers
+	total_samples = torch.from_numpy(total_samples)
+	return samples_per_layer, edges_between_layers, total_samples
 
 
 def sample_preneighbors_within_region(cgraph, region, samples_per_node=10):
