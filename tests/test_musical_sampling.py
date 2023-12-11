@@ -2,12 +2,16 @@ from graphmuse.samplers.sampling_sketch import MuseDataloader
 from graphmuse.utils.graph import edges_from_note_array, HeteroScoreGraph
 import numpy as np
 from graphmuse.samplers import compute_edge_list
+import torch
+# Standardize the random seed
+np.random.seed(42)
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+torch.backends.cudnn.deterministic = True
 
-import sys
-from tqdm import tqdm
 
 
-num_graphs = 10
+num_graphs = 20
 max_nodes = 500
 min_nodes = 100
 max_dur = 20
@@ -49,7 +53,7 @@ for i in range(num_graphs):
     graphs.append(graph)
 
 # create dataloader
-dataloader = MuseDataloader(graphs, subgraph_size=100, subgraphs=4, batch_size=1, num_workers=0)
+dataloader = MuseDataloader(graphs, subgraph_size=100, batch_size=4, num_workers=0, sample_rightmost=True)
 # iterate over dataloader
 batch = next(iter(dataloader))
 
