@@ -18,12 +18,11 @@ def graph(edges):
 		a Graph object in C
 
 	"""
-	if edges.dtype not in (numpy.int64, numpy.int32):
-		raise TypeError(f"currently only {numpy.int32} and {numpy.int64} nodes supported, not {edges.dtype}")
+	# TODO: support 64 bit integers
+	if edges.dtype not in (numpy.int32,):
+		raise TypeError(f"currently only {numpy.int32} nodes supported, not {edges.dtype}")
 
 	node_count = max(numpy.max(edges[0]), edges[1][-1])+1
-
-	# TODO: change strides such that src and dst can be iterated separately without strides in C code
 
 	return Graph(edges, node_count)
 
