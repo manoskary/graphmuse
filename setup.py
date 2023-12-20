@@ -15,6 +15,10 @@ graph = [os.path.join(dirname, "graphmuse", "utils", x) for x in ["cython_graph.
 if os.name=='posix':
     eca = ["-std=c11"]
     eca.append("-DPOSIX")
+
+    #add flag to turn off debug mode (increasing speed)
+    #eca.append("-DGM_DEBUG_OFF")
+
     from psutil import cpu_count
     thread_count = cpu_count(logical=False)
 

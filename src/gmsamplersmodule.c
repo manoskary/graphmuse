@@ -66,6 +66,8 @@ static PyArrayObject* numpy_edge_list(Node* edge_list, Index edge_list_size){
 
 	return result;
 }
+
+//#define GM_DEBUG_OFF
 #include <GM_assert.h>
 
 #include <utils.c>
@@ -75,7 +77,7 @@ static PyArrayObject* numpy_edge_list(Node* edge_list, Index edge_list_size){
 #include <threadpool.c>
 #include <mt_hashset_static.c>
 #endif
-//#define GM_DEBUG_OFF
+
 
 
 // this should be fine actually since it is used on random nodes
@@ -397,6 +399,8 @@ static void neighbor_counts_to_offsets(Index node_count, Index* neighbor_counts)
 
 
 static void write_node_numpy2(PyArrayObject* np_array, Index i, Index j, Node n){
+	ASSERT(i < PyArray_DIM(np_array, 0) && j < PyArray_DIM(np_array, 1));
+
 	Node* n_mem = (Node*)PyArray_GETPTR2(np_array, i, j);
 	*n_mem = n;
 }
@@ -430,6 +434,9 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 
 			// src[cursor] = Index_To_Node(i);
 			// dst[cursor] = Index_To_Node(j);
+
+			ASSERT(cursor < neighbor_offsets[node_count]);
+
 			types[cursor] = Onset;
 
 			cursor+= (Index)cond1;
@@ -442,6 +449,8 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 
 			// src[cursor] = Index_To_Node(i);
 			// dst[cursor] = Index_To_Node(j);
+
+			ASSERT(cursor < neighbor_offsets[node_count]);
 			types[cursor] = Consecutive;
 
 			cursor+= (Index)cond3;
@@ -466,6 +475,7 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 
 			// src[cursor] = Index_To_Node(i);
 			// dst[cursor] = Index_To_Node(j);
+			ASSERT(cursor < neighbor_offsets[node_count]);
 			types[cursor] = During;
 
 			
@@ -488,6 +498,7 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 
 				// src[cursor] = Index_To_Node(i);
 				// dst[cursor] = Index_To_Node(j);
+				ASSERT(cursor < neighbor_offsets[node_count]);
 				types[cursor] = Rest;
 
 				bool
@@ -519,6 +530,7 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 
 				// src[cursor] = Index_To_Node(i);
 				// dst[cursor] = Index_To_Node(j);
+				ASSERT(cursor < neighbor_offsets[node_count]);
 				types[cursor] = Consecutive;
 
 				cursor+= (Index)cond3;
@@ -531,6 +543,7 @@ static void fill_in_neighbors(Index node_count, Index* neighbor_offsets, PyArray
 
 				// src[cursor] = Index_To_Node(i);
 				// dst[cursor] = Index_To_Node(j);
+				ASSERT(cursor < neighbor_offsets[node_count]);
 				types[cursor] = Onset;
 
 				cursor+= (Index)cond1;
@@ -1195,7 +1208,9 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 
 		Node* init_nodes = (Node*)PyArray_DATA(init_layer);
 
-		for(Index sample=0; sample<samples_per_node; sample++){
+		Index upper_bound = MACRO_MIN(samples_per_node,graph->node_count);
+
+		for(Index sample=0; sample<upper_bound; sample++){
 			Node node_sample;
 
 			for(;;){
@@ -1231,11 +1246,10 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 		HashSet_new(&total_samples, samples_per_node);
 		HashSet_init(&total_samples);
 
-		Node* raw_target_nodes = PyArray_DATA(target_nodes);
-
 		for(Index n = 0 ; n < prev_size; n++){
-			HashSet_add_node(&load_set, raw_target_nodes[n]);
-			HashSet_add_node(&total_samples, raw_target_nodes[n]);
+			Node* ns = (Node*)PyArray_GETPTR1(target_nodes, n);
+			HashSet_add_node(&load_set, *ns);
+			HashSet_add_node(&total_samples, *ns);
 		}
 
 		prev_layer = target_nodes;
@@ -1250,7 +1264,8 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 	
 
 	// We allocate this much upfront because it will be used all almost surely
-	Node* edge_list_canvas = (Index*)malloc(3*sizeof(Node)*prev_size*power(samples_per_node, depth));
+	Index edge_list_size = prev_size*power(samples_per_node, depth);
+	Node* edge_list_canvas = (Index*)malloc(3*sizeof(Node)*edge_list_size);
 
 	ASSERT(edge_list_canvas);
 	
@@ -1277,6 +1292,8 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 					HashSet_add_node(&load_set, pre_neighbor);
 
 					HashSet_add_node(&total_samples, pre_neighbor);
+
+					ASSERT(edge_list_cursor < edge_list_size);
 
 					edge_list_canvas[3*edge_list_cursor] = pre_neighbor;
 					edge_list_canvas[3*edge_list_cursor+1] = dst_node;
@@ -1310,6 +1327,8 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 					HashSet_add_node(&load_set, pre_neighbor);
 					HashSet_add_node(&total_samples, pre_neighbor);
 
+					ASSERT(edge_list_cursor < edge_list_size);
+
 					edge_list_canvas[3*edge_list_cursor] = pre_neighbor;
 					edge_list_canvas[3*edge_list_cursor+1] = dst_node;
 					edge_list_canvas[3*edge_list_cursor+2] = edge_type_at(graph, offset + perm[rand_i]);
@@ -1338,6 +1357,8 @@ static PyObject* GMSamplers_sample_nodewise(PyObject* csamplers, PyObject* args)
 					HashSet_add_node(&node_hash_set, pre_neighbor);
 					HashSet_add_node(&load_set, pre_neighbor);
 					HashSet_add_node(&total_samples, pre_neighbor);
+
+					ASSERT(edge_list_cursor < edge_list_size);
 					
 
 					edge_list_canvas[3*edge_list_cursor] = pre_neighbor;
@@ -1799,6 +1820,20 @@ static PyObject* GMSamplers_sample_layerwise_fully_connected(PyObject* csamplers
 }
 
 
+static PyObject* GM_set_seed(PyObject* csamplers, PyObject* args){
+	int64_t seed;
+
+	if(!PyArg_ParseTuple(args, "I", &seed)){
+		printf("If you don't provide proper arguments, you can't have any neighbor sampling.\nHow can you have any neighbor sampling if you don't provide proper arguments?\n");
+		return NULL;
+	}
+
+	srand(seed);
+
+	Py_RETURN_NONE;
+}
+
+
 static PyMethodDef GMSamplersMethods[] = {
 	{"c_sample_nodewise", GMSamplers_sample_nodewise, METH_VARARGS, "Random sampling within a graph through multiple layers where each pre-neighborhood of a node in a layer gets sampled separately."},
 	#ifdef Thread_Count_Arg
@@ -1814,6 +1849,7 @@ static PyMethodDef GMSamplersMethods[] = {
 	{"c_extend_score_region_via_neighbor_sampling", extend_score_region_via_neighbor_sampling, METH_VARARGS, "Given a score region, add samples from outside the region aquired via neighboorhood sampling"},
 	{"c_sample_neighbors_in_score_graph", sample_neighbors_in_score_graph, METH_VARARGS, "nodewise sampling of neighbors without pre-computed lookup table"},
 	{"c_sample_preneighbors_within_region", sample_preneighbors_within_region, METH_VARARGS, ""},
+	{"c_set_seed", GM_set_seed, METH_VARARGS, ""},
 	{NULL, NULL, 0, NULL}
 };
 

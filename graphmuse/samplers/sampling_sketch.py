@@ -137,7 +137,7 @@ class MuseDataloader(DataLoader):
         for random_graph in graphlist:
             region = csamplers.random_score_region(random_graph.note_array, self.subgraph_size)
             # TODO: include edge_types either as a separate tensor or as a dimension of edge_index
-            sampled_nodes_first_layer, edges_within_region = csamplers.sample_preneighbors_within_region(random_graph.c_graph, region, self.samples_per_node)
+            sampled_nodes_first_layer, edges_within_region = csamplers.sample_preneighbors_within_region(random_graph.c_graph, region, self.samples_per_node)#torch.tensor([]).long(), torch.tensor([[],[]]).long()
 
 
             # This is the last layer neighbors extension

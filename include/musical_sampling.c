@@ -32,6 +32,8 @@ static PyObject* random_score_region(PyObject* csamplers, PyObject* args){
 		region_end = region_start+budget;
 
 		while(region_end-1>=region_start && onsets[region_end]==onsets[region_end-1]){
+			ASSERT(region_end>=1);
+
 			region_end--;
 		}
 
@@ -131,6 +133,9 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 				for(Index i=0; i<marker; i++){
 					Node pre_neighbor = src_node_at(graph, offset + i);
 					HashSet_add_node(&samples, pre_neighbor);
+
+					ASSERT(edge_list_cursor < edge_list_size);
+
 					edge_list[3*edge_list_cursor]=pre_neighbor;
 					edge_list[3*edge_list_cursor+1]=Index_To_Node(j);
 					edge_list[3*edge_list_cursor+2]=edge_type_at(graph, offset + i);
@@ -161,6 +166,8 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 
 					HashSet_add_node(&samples, pre_neighbor);
 
+					ASSERT(edge_list_cursor < edge_list_size);
+
 					edge_list[3*edge_list_cursor]=pre_neighbor;
 					edge_list[3*edge_list_cursor+1]=Index_To_Node(j);
 					edge_list[3*edge_list_cursor+2]=edge_type_at(graph, offset + perm[rand_i]);
@@ -187,6 +194,8 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 					}
 
 					HashSet_add_node(&samples, pre_neighbor);
+
+					ASSERT(edge_list_cursor < edge_list_size);
 					
 					edge_list[3*edge_list_cursor]=pre_neighbor;
 					edge_list[3*edge_list_cursor+1]=Index_To_Node(j);
@@ -242,8 +251,14 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 			if(marker-region_end <= samples_per_node){
 				for(Node j=region_end; j<marker; j++){
 					HashSet_add_node(&samples, j);
+
+					ASSERT(edge_list_cursor < edge_list_size);
+
 					edge_list[3*edge_list_cursor]=Index_To_Node(j);
 					edge_list[3*edge_list_cursor+1]=Index_To_Node((Index)i);
+
+					// TODO: edge_list[3*edge_list_cursor+2]= what type?
+
 					edge_list_cursor++;
 				}
 			}
@@ -271,8 +286,18 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 
 					HashSet_add_node(&samples, node_sample);
 
+					ASSERT(edge_list_cursor < edge_list_size);
+
 					edge_list[3*edge_list_cursor]=node_sample;
 					edge_list[3*edge_list_cursor+1]=Index_To_Node((Index)i);
+
+					// TODO: edge_list[3*edge_list_cursor+2] = what type?
+
+					//	onsets[node_sample]==onsets[i] => edge_list[3*edge_list_cursor+2] = Onset
+					//  onsets[node_sample]==onsets[i]+durations[i] => edge_list[3*edge_list_cursor+2] = Consecutive
+					// etc.
+
+
 					edge_list_cursor++;
 
 					perm[rand_j]=perm[j];
@@ -280,7 +305,7 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 
 				free(perm);
 			}
-			else{
+			else{ //rejection sampling
 				HashSet_init(&node_tracker);
 
 				for(Index sample=0; sample<samples_per_node; sample++){
@@ -294,8 +319,15 @@ static PyObject* extend_score_region_via_neighbor_sampling(PyObject* csamplers, 
 
 					HashSet_add_node(&samples, node_sample);
 
+					ASSERT(edge_list_cursor < edge_list_size);
+
 					edge_list[3*edge_list_cursor]=node_sample;
 					edge_list[3*edge_list_cursor+1]=Index_To_Node((Index)i);
+
+					// TODO: edge_list[3*edge_list_cursor+2]= what type based on (node_sample, i)?
+
+
+
 					edge_list_cursor++;
 				}
 			}
@@ -415,6 +447,8 @@ static PyObject* sample_neighbors_in_score_graph(PyObject* csamplers, PyObject* 
 					HashSet_add_node(&node_hash_set, j);
 					HashSet_add_node(&total_samples, j);
 
+					ASSERT(edge_list_cursor < edge_list_size);
+
 					edge_list[3*edge_list_cursor]=j;
 					edge_list[3*edge_list_cursor+1]=i;
 					edge_list_cursor++;
@@ -445,6 +479,8 @@ static PyObject* sample_neighbors_in_score_graph(PyObject* csamplers, PyObject* 
 					HashSet_add_node(&node_hash_set, j);
 					HashSet_add_node(&total_samples, j);
 
+					ASSERT(edge_list_cursor < edge_list_size);
+
 					edge_list[3*edge_list_cursor]=j;
 					edge_list[3*edge_list_cursor+1]=i;
 					edge_list_cursor++;
@@ -468,6 +504,8 @@ static PyObject* sample_neighbors_in_score_graph(PyObject* csamplers, PyObject* 
 
 					HashSet_add_node(&node_hash_set, j);
 					HashSet_add_node(&total_samples, j);
+
+					ASSERT(edge_list_cursor < edge_list_size);
 					
 
 					edge_list[3*edge_list_cursor]=j;
@@ -572,6 +610,8 @@ static PyObject* sample_preneighbors_within_region(PyObject* csamplers, PyObject
 
 			for(Index ix=0; ix<samples_per_node; ix++){
 				Index rand_ix = ix + rand()%(intersection_count-ix);
+
+				ASSERT(rand_ix < intersection_count);
 
 				Node i = src_node_at(graph, offset + perm[rand_ix]);
 

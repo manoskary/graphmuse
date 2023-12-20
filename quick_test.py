@@ -60,6 +60,12 @@ region = sam.random_score_region(note_array, 100)
 
 print(region)
 
+sam.c_set_seed(10101)
+
+region = sam.random_score_region(note_array, 100)
+
+print(region)
+
 (left_ext, left_edges), (right_ext, right_edges) = sam.extend_score_region_via_neighbor_sampling(g, note_array, region, 2)
 
 
