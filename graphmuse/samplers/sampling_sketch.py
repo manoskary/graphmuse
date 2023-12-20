@@ -136,9 +136,9 @@ class MuseDataloader(DataLoader):
         # Given a list of graphs, sample a subgraph from each graph of size at most subgraph_size
         for random_graph in graphlist:
             region = csamplers.random_score_region(random_graph.note_array, self.subgraph_size)
-            # TODO: include edge_types either as a separate tensor or as a dimension of edge_index
-            sampled_nodes_first_layer, edges_within_region = csamplers.sample_preneighbors_within_region(random_graph.c_graph, region, self.samples_per_node)#torch.tensor([]).long(), torch.tensor([[],[]]).long()
-
+            # NOTE: This needs correction
+            # sampled_nodes_first_layer, edges_within_region = csamplers.sample_preneighbors_within_region(random_graph.c_graph, region, self.samples_per_node)#torch.tensor([]).long(), torch.tensor([[],[]]).long()
+            sampled_nodes_first_layer, edges_within_region = torch.tensor([]).long(), torch.tensor([[], []]).long()
 
             # This is the last layer neighbors extension
             (left_extension, left_edges), (right_extension, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(random_graph.c_graph, random_graph.note_array, region, self.samples_per_node, self.sample_rightmost)
@@ -155,13 +155,11 @@ class MuseDataloader(DataLoader):
             cat_list = (edges_within_region, left_edges, right_edges)
 
             # filtering out edge types
+            # NOTE: We need to filter out the edge types here (not done for the right layers)
             cat_list = [e[:2] for e in cat_list]
 
             # Translate edges to subgraph indices (do this on GPU when available).
             subgraph_edge_index = torch.cat(cat_list, dim=1)
-
-
-
             sampled_nodes = torch.cat((torch.arange(region[0], region[1]), sampled_nodes_first_layer, total_left_samples, total_right_samples)).to(self.device)
             new_mapping = torch.arange(sampled_nodes.shape[0], device=self.device)
             nodes_remap = torch.empty_like(torch.zeros(random_graph.x.shape[0]), dtype=int).to(self.device)
