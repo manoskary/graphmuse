@@ -22,10 +22,10 @@ class TestSamplers(unittest.TestCase):
             g = sam.graph(edges)
 
             target_size = np.random.randint(1,V//4,1)[0]
-            target = np.unique(np.random.randint(0, V, target_size, np.uint32))
-            depth = 3
+            target = np.unique(np.random.randint(0, V, target_size, np.int32))
+            depth = 2
             samples_per_node = 3
-            samples_per_layer, edges_between_layers, load_per_layer = nodewise_sampling_method(g, depth, samples_per_node, target)
+            samples_per_layer, edges_between_layers, load_per_layer, total_samples = nodewise_sampling_method(g, depth, samples_per_node, target)
 
             self.assertTrue(len(samples_per_layer)==depth+1)
             self.assertTrue(len(edges_between_layers)==depth)

@@ -2,15 +2,12 @@
 import setuptools
 import os, sys
 import numpy
-from Cython.Build import cythonize
 
 
 dirname = os.path.dirname(__file__)
 graph = [os.path.join(dirname, "graphmuse", "utils", x) for x in ["cython_graph.pyx", "cython_utils.pyx", "cython_sampler.pyx"]]
 # module = setuptools.Extension('graph', sources=[graph])
 # module = cythonize(graph)
-
-
 
 if os.name=='posix':
     eca = ["-std=c11"]
@@ -27,9 +24,6 @@ if os.name=='posix':
 elif sys.platform.startswith('win'):
     eca = ["-DWindows"]
 
-
-
-
 ext_modules = [
     setuptools.Extension(
         name="graphmuse.samplers.csamplers", sources=[os.path.join("src", "gmsamplersmodule.c")], extra_compile_args = eca,
@@ -37,11 +31,6 @@ ext_modules = [
 
 os.environ["CC"] = "gcc"
 os.environ["CXX"] = "gcc"
-
-
-
-
-
 
 setuptools.setup(
     name='graphmuse',
@@ -55,7 +44,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Topic :: Scientific/Engineering :: Graph Deep Learning",
     ],
-    include_dirs=[os.path.join(numpy.get_include(),"numpy"), "include", "../miniconda3/include/libxml2/libxml"],
+    include_dirs=[os.path.join(numpy.get_include(), "numpy"), "include", "../miniconda3/include/libxml2/libxml"],
     # ext_modules=[module],
     ext_modules= ext_modules,
     author='Emmanouil Karystinaios, Nimrod Varga',
