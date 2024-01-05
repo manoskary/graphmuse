@@ -3,6 +3,10 @@ import unittest
 import numpy as np
 import torch
 
+torch.random.manual_seed(0)
+np.random.seed(0)
+sam.c_set_seed(0)
+
 
 class TestSamplers(unittest.TestCase):
 
@@ -11,7 +15,7 @@ class TestSamplers(unittest.TestCase):
             print(f"Unit Testing for {nodewise_sampling_method.__name__}")
 
             V = 100
-            E = np.random.randint(1, V**2, 1)[0]
+            E = 4*V
 
             edges = np.random.randint(0, V, (2, E), dtype=np.int32)
 
@@ -19,6 +23,9 @@ class TestSamplers(unittest.TestCase):
 
             resort_idx = np.lexsort((edges[0], edges[1]))
             edges = edges[:, resort_idx]
+
+            # Add random edge types
+            edges = np.vstack((edges, np.random.randint(0, 4, E, dtype=np.int32)))
 
             g = sam.graph(edges)
 
@@ -46,8 +53,8 @@ class TestSamplers(unittest.TestCase):
                     else:
                         samples_counter[d] = 1
 
-                for d,c in samples_counter.items():
-                    self.assertTrue(c == min(samples_per_node,g.preneighborhood_count(d)), f"count of {d} is {c}, but pnc is {g.preneighborhood_count(d)}")
+                for d, c in samples_counter.items():
+                    self.assertTrue(c == min(samples_per_node, g.preneighborhood_count(d)), f"count of {d} is {c}, but pnc is {g.preneighborhood_count(d)}")
 
                 unique_src = np.unique(current_edges[0])
 
