@@ -4,6 +4,8 @@ import torch
 import graphmuse.samplers as csamplers
 from graphmuse.utils.graph import HeteroScoreGraph
 from torch_geometric.data import Data, Batch
+from torch_geometric.sampler import HGTSampler
+
 
 
 class SubgraphCreationSampler(Sampler):
@@ -102,10 +104,15 @@ class MuseDataloader(DataLoader):
     num_workers : int
         The number of workers.
     """
-    def __init__(self, graphs, subgraph_size, num_layers=3, samples_per_node=3, batch_size=1, num_workers=0, sample_rightmost=False, device="cpu"):
+    def __init__(self, graphs, subgraph_size, num_layers=3, samples_per_node=3, batch_size=1, num_workers=0, sample_rightmost=False, device="cpu", verbose=False, **kwargs):
         self.graphs = graphs
         self.subgraph_size = subgraph_size
         self.device = device
+        self.random_state = kwargs.get("random_state", None)
+        if self.random_state is not None:
+            csamplers.c_set_seed(self.random_state)
+            if verbose:
+                print("Setting random state to {}".format(self.random_state))
         self.sample_rightmost = sample_rightmost
         self.num_layers = num_layers # This is for a later version with node-wise sampling
         self.samples_per_node = samples_per_node
@@ -136,21 +143,24 @@ class MuseDataloader(DataLoader):
         # Given a list of graphs, sample a subgraph from each graph of size at most subgraph_size
         for random_graph in graphlist:
             region = csamplers.random_score_region(random_graph.note_array, self.subgraph_size)
+
             # NOTE: This needs correction
-            # sampled_nodes_first_layer, edges_within_region = csamplers.sample_preneighbors_within_region(random_graph.c_graph, region, self.samples_per_node)#torch.tensor([]).long(), torch.tensor([[],[]]).long()
-            sampled_nodes_first_layer, edges_within_region = torch.tensor([]).long(), torch.tensor([[], []]).long()
+            sampled_nodes_first_layer, edges_within_region = csamplers.sample_preneighbors_within_region(random_graph.c_graph, region, self.samples_per_node)#torch.tensor([]).long(), torch.tensor([[],[]]).long()
+            # sampled_nodes_first_layer, edges_within_region = torch.tensor([]).long(), torch.tensor([[], []]).long()
 
             # This is the last layer neighbors extension
-            (left_extension, left_edges), (right_extension, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(random_graph.c_graph, random_graph.note_array, region, self.samples_per_node, self.sample_rightmost)
+            # (left_extension, left_edges), (right_extension, right_edges) = csamplers.extend_score_region_via_neighbor_sampling(random_graph.c_graph, random_graph.note_array, region, self.samples_per_node, self.sample_rightmost)
+            (left_extension, left_edges), (right_extension, right_edges) = (torch.tensor([]).long(), torch.tensor([[], []]).long()), (torch.tensor([]).long(), torch.tensor([[], []]).long())
 
             # Sample leftmost typical node-wise by num layers excluding the last layer which was sampled above
             left_layers, edges_between_left_layers, _, total_left_samples = csamplers.sample_nodewise(random_graph.c_graph, self.num_layers-2, self.samples_per_node, left_extension.numpy())
+            # left_layers, edges_between_left_layers, total_left_samples = torch.tensor([]).long(), torch.tensor([[], []]).long(), torch.tensor([]).long()
 
             if self.sample_rightmost:
                 # Sample rightmost node-wise by num layers (because of reverse edges missing)
                 right_layers, edges_between_right_layers, total_right_samples = csamplers.sample_neighbors_in_score_graph(random_graph.note_array, self.num_layers-2, self.samples_per_node, right_extension.numpy())
             else:
-                right_layers, edges_between_right_layers, total_right_samples = [], [], torch.empty(0)
+                right_layers, edges_between_right_layers, total_right_samples = torch.tensor([]).long(), torch.tensor([[], []]).long(), torch.tensor([]).long()
 
             cat_list = (edges_within_region, left_edges, right_edges)
 
