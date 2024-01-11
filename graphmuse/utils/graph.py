@@ -9,6 +9,7 @@ import pickle
 from .general import MapDict
 import warnings
 import graphmuse.samplers as csamplers
+from torch_geometric.data import HeteroData
 
 
 class HeteroScoreGraph(object):
@@ -137,6 +138,23 @@ class HeteroScoreGraph(object):
             del object_properties['note_array']
         with open(os.path.join(save_dir, save_name, 'graph_info.pkl'), 'wb') as handle:
             pickle.dump(object_properties, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+
+def graph_to_pyg(x, edge_index, edge_attributes=None, note_array=None):
+    edge_type_map = {"onset": 0, "consecutive": 1, "during": 2, "rest": 3}
+    data = HeteroData()
+    data["note"].x = torch.from_numpy(x) if isinstance(x, np.ndarray) else x
+    edge_type = torch.from_numpy(edge_index[2])
+    edge_index = torch.from_numpy(edge_index[:2])
+    for k, v in edge_type_map.items():
+        data["note", k, "note"].edge_index = torch.from_numpy(edge_index[:, edge_type == v])
+        if edge_attributes is not None:
+            data["note", k, "note"].edge_attr = torch.from_numpy(edge_attributes[edge_type == v])
+    if note_array is not None:
+        for k in note_array.dtype.names:
+            data["note", k] = torch.from_numpy(note_array[k])
+    return data
 
 
 def load_score_hgraph(load_dir, name=None):
