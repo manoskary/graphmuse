@@ -1,143 +1,11 @@
 import numpy as np
 import torch
-from numpy.lib import recfunctions as rfn
-import os
-import random
-import string
-import pickle
 import warnings
 import graphmuse.samplers as csamplers
+import partitura.score as spt
 from torch_geometric.data import HeteroData
 from torch_geometric.transforms import ToUndirected
-
-
-class HeteroScoreGraph(object):
-    """
-    Heterogeneous Score Graph.
-
-    Parameters
-    ----------
-    note_features : numpy array or torch tensor
-        The features of the notes in the score.
-    edges : numpy
-        The edges of the score graph.
-    etypes : list of str
-        The types of the edges.
-    name : str
-        The name of the score graph.
-    note_array : structured numpy array (optional)
-        The note array of the score.
-    edge_weights : numpy array (optional)
-        The weights of the edges.
-    labels : numpy array (optional)
-        The labels of the notes.
-    """
-
-    def __init__(self, note_features, edges, etypes=["onset", "consecutive", "during", "rest"], name=None,
-                 note_array=None, edge_weights=None, labels=None):
-        self.node_features = note_features.dtype.names if note_features.dtype.names else []
-        self.features = note_features
-        # Filter out string fields of structured array.
-        if self.node_features:
-            self.node_features = [feat for feat in self.node_features if
-                                  note_features.dtype.fields[feat][0] != np.dtype('U256')]
-            self.features = self.features[self.node_features]
-        self.x = torch.from_numpy(
-            np.asarray(rfn.structured_to_unstructured(self.features) if self.node_features else self.features,
-                       dtype=np.float32))
-        assert etypes is not None
-        self.etypes = {t: i for i, t in enumerate(etypes)}
-        self.note_array = note_array
-        self.edge_type = torch.from_numpy(edges[-1].astype(np.int32)).long()
-        self.edge_index = torch.from_numpy(edges[:2].astype(np.int32)).long()
-        self.c_graph = csamplers.graph(edges[:2])
-        self.edge_weights = torch.ones(len(self.edge_index[0])) if edge_weights is None else torch.from_numpy(
-            edge_weights)
-        self.name = name
-        self.y = labels if labels is None else torch.from_numpy(labels)
-
-    def node_count(self):
-        return len(self.note_array)
-
-    def adj(self, weighted=False):
-        if weighted:
-            return torch.sparse_coo_tensor(self.edge_index, self.edge_weights, (len(self.x), len(self.x)))
-        ones = torch.ones(len(self.edge_index[0]))
-        matrix = torch.sparse_coo_tensor(self.edge_index, ones, (len(self.x), len(self.x)))
-        return matrix
-
-    def add_measure_nodes(self, measures):
-        """Add virtual nodes for every measure"""
-        assert "onset_div" in self.note_array.dtype.names, "Note array must have 'onset_div' field to add measure nodes."
-        if not isinstance(measures, np.ndarray):
-            measures = np.array([[m.start.t, m.end.t] for m in measures])
-        # if not hasattr(self, "beat_nodes"):
-        #     self.add_beat_nodes()
-        nodes = np.arange(len(measures))
-        # Add new attribute to hg
-        edges = []
-        for i in range(len(measures)):
-            idx = np.where(
-                (self.note_array["onset_div"] >= measures[i, 0]) & (self.note_array["onset_div"] < measures[i, 1]))[0]
-            if idx.size:
-                edges.append(np.vstack((idx, np.full(idx.size, i))))
-        self.measure_nodes = nodes
-        self.measure_edges = np.hstack(edges)
-        # Warn if all edges is empty
-        if self.measure_edges.size == 0:
-            warnings.warn(
-                f"No edges found for measure nodes. Check that the note array has the 'onset_div' field on score {self.name}.")
-
-    def add_beat_nodes(self):
-        """Add virtual nodes for every beat"""
-        assert "onset_beat" in self.note_array.dtype.names, "Note array must have 'onset_beat' field to add measure nodes."
-        nodes = np.arange(int(self.note_array["onset_beat"].max()))
-        # Add new attribute to hg
-
-        edges = []
-        for b in nodes:
-            idx = np.where((self.note_array["onset_beat"] >= b) & (self.note_array["onset_beat"] < b + 1))[0]
-            if idx.size:
-                edges.append(np.vstack((idx, np.full(idx.size, b))))
-        self.beat_nodes = nodes
-        self.beat_edges = np.hstack(edges)
-
-    def assign_typed_weight(self, weight_dict: dict):
-        assert weight_dict.keys() == self.etypes.keys()
-        for k, v in weight_dict.items():
-            etype = self.etypes[k]
-            self.edge_weights[self.edge_type == etype] = v
-
-    def get_edges_of_type(self, etype):
-        assert etype in self.etypes.keys()
-        etype = self.etypes[etype]
-        return self.edge_index[:, self.edge_type == etype]
-
-    def save(self, save_dir):
-        save_name = self.name if self.name else ''.join(random.choice(string.ascii_letters) for i in range(10))
-        (os.makedirs(os.path.join(save_dir, save_name)) if not os.path.exists(
-            os.path.join(save_dir, save_name)) else None)
-        object_properties = vars(self)
-        with open(os.path.join(save_dir, save_name, "x.npy"), "wb") as f:
-            np.save(f, self.x.numpy())
-        del object_properties['x']
-        with open(os.path.join(save_dir, save_name, "edge_index.npy"), "wb") as f:
-            np.save(f, torch.cat((self.edge_index, self.edge_type.unsqueeze(0))).numpy())
-        del object_properties['edge_index']
-        del object_properties['edge_type']
-        if isinstance(self.y, torch.Tensor):
-            with open(os.path.join(save_dir, save_name, "y.npy"), "wb") as f:
-                np.save(f, self.y.numpy())
-            del object_properties['y']
-        if isinstance(self.edge_weights, torch.Tensor):
-            np.save(open(os.path.join(save_dir, save_name, "edge_weights.npy"), "wb"), self.edge_weights.numpy())
-            del object_properties['edge_weights']
-        if isinstance(self.note_array, np.ndarray):
-            np.save(open(os.path.join(save_dir, save_name, "note_array.npy"), "wb"), self.note_array)
-            del object_properties['note_array']
-        with open(os.path.join(save_dir, save_name, 'graph_info.pkl'), 'wb') as handle:
-            pickle.dump(object_properties, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
+from typing import Optional, Union, Tuple, List, Dict, Any
 
 
 def graph_to_pyg(x, edge_index, edge_attributes=None, note_array=None):
@@ -154,84 +22,6 @@ def graph_to_pyg(x, edge_index, edge_attributes=None, note_array=None):
         for k in note_array.dtype.names:
             data["note", k] = torch.from_numpy(note_array[k])
     return data
-
-
-def load_score_hgraph(load_dir, name=None):
-    path = os.path.join(load_dir, name) if os.path.basename(load_dir) != name else load_dir
-    if not os.path.exists(path) or not os.path.isdir(path):
-        raise ValueError("The directory is not recognized.")
-    x = np.load(open(os.path.join(path, "x.npy"), "rb"))
-    edge_index = np.load(open(os.path.join(path, "edge_index.npy"), "rb"))
-    graph_info = pickle.load(open(os.path.join(path, "graph_info.pkl"), "rb"))
-    y = np.load(open(os.path.join(path, "y.npy"), "rb")) if os.path.exists(os.path.join(path, "y.npy")) else None
-    edge_weights = np.load(open(os.path.join(path, "edge_weights.npy"), "rb")) if os.path.exists(os.path.join(path, "edge_weights.npy")) else None
-    note_array = np.load(open(os.path.join(path, "note_array.npy"), "rb")) if os.path.exists(
-        os.path.join(path, "note_array.npy")) else None
-    name = name if name else os.path.basename(path)
-    hg = HeteroScoreGraph(note_features=x, edges=edge_index, name=name, labels=y, edge_weights=edge_weights, note_array=note_array)
-    for k, v in graph_info.items():
-        setattr(hg, k, v)
-    return hg
-
-
-def load_score_hgraph(load_dir, name=None):
-    path = os.path.join(load_dir, name) if os.path.basename(load_dir) != name else load_dir
-    if not os.path.exists(path) or not os.path.isdir(path):
-        raise ValueError("The directory is not recognized.")
-    x = np.load(open(os.path.join(path, "x.npy"), "rb"))
-    edge_index = np.load(open(os.path.join(path, "edge_index.npy"), "rb"))
-    graph_info = pickle.load(open(os.path.join(path, "graph_info.pkl"), "rb"))
-    y = np.load(open(os.path.join(path, "y.npy"), "rb")) if os.path.exists(os.path.join(path, "y.npy")) else None
-    y = graph_info.y if hasattr(graph_info, "y") and y is None else y
-    edge_weights = np.load(open(os.path.join(path, "edge_weights.npy"), "rb")) if os.path.exists(os.path.join(path, "edge_weights.npy")) else None
-    note_array = np.load(open(os.path.join(path, "note_array.npy"), "rb")) if os.path.exists(
-        os.path.join(path, "note_array.npy")) else None
-    name = name if name else os.path.basename(path)
-    hg = HeteroScoreGraph(note_features=x, edges=edge_index, name=name, labels=y, edge_weights=edge_weights, note_array=note_array)
-    for k, v in graph_info.items():
-        setattr(hg, k, v)
-    return hg
-
-
-def check_note_array(na):
-    dtypes = na.dtype.names
-    if not all([x in dtypes for x in ["onset_beat", "duration_beat", "ts_beats", "ts_beat_type"]]):
-        raise(TypeError("The given Note array is missing necessary fields."))
-
-
-class BatchedHeteroScoreGraph(HeteroScoreGraph):
-    def __init__(self, note_features, edges, lengths, etypes=["onset", "consecutive", "during", "rest"], name=None, note_array=None, edge_weights=None, labels=None):
-        super(BatchedHeteroScoreGraph, self).__init__(note_features, edges, etypes, name, note_array, edge_weights, labels)
-        self.lengths = lengths
-
-    def unbatch(self):
-        graphs = []
-        for i, l in enumerate(self.lengths):
-            graphs.append(HeteroScoreGraph(self.x[i, :l], self.edge_index[i, :, :l], self.etypes, self.name, self.note_array[i, :l], self.edge_weights[i, :l], self.y[i]))
-        return graphs
-
-
-def batch_graphs(graphs):
-    """
-    Batch a list of graphs into a single graph.
-
-    Returns:
-    --------
-    batched_graph: HeteroScoreGraph
-        A single graph with the same attributes as the input graphs, but with
-        batched attributes.
-    """
-    lengths = [0] + [len(g.x) for g in graphs[:-1]]
-    new_edges = np.concatenate([g.edge_index + lengths[i] for i, g in enumerate(graphs)], axis=1)
-    batched_graph = BatchedHeteroScoreGraph(note_features=np.concatenate([g.x.numpy() for g in graphs], axis=0),
-                                     edges=new_edges,
-                                     lengths=lengths,
-                                     etypes=graphs[0].etypes,
-                                     names=[g.name for g in graphs],
-                                     labels=np.concatenate([g.y.numpy() for g in graphs], axis=0) if graphs[0].y is not None else None,
-                                     edge_weights=np.concatenate([g.edge_weights.numpy() for g in graphs], axis=0) if graphs[0].edge_weights is not None else None,
-                                     note_array=np.concatenate([g.note_array for g in graphs], axis=0) if graphs[0].note_array is not None else None)
-    return batched_graph
 
 
 def edges_from_note_array(note_array):
@@ -281,38 +71,33 @@ def edges_from_note_array(note_array):
 
 
 def add_reverse_edges(graph, mode):
-    if isinstance(graph, HeteroScoreGraph):
-        if mode == "new_type":
-            # Add reverse During Edges
-            graph.edge_index = torch.cat((graph.edge_index, graph.get_edges_of_type("during").flip(0)), dim=1)
-            graph.edge_type = torch.cat((graph.edge_type, 2 + torch.zeros(graph.edge_index.shape[1] - graph.edge_type.shape[0],dtype=torch.long)), dim=0)
-            # Add reverse Consecutive Edges
-            graph.edge_index = torch.cat((graph.edge_index, graph.get_edges_of_type("consecutive").flip(0)), dim=1)
-            graph.edge_type = torch.cat((graph.edge_type, 4+torch.zeros(graph.edge_index.shape[1] - graph.edge_type.shape[0], dtype=torch.long)), dim=0)
-            graph.etypes["consecutive_rev"] = 4
-        else:
-            graph.edge_index = torch.cat((graph.edge_index, graph.edge_index.flip(0)), dim=1)
-            raise NotImplementedError("To undirected is not Implemented for HeteroScoreGraph.")
-    # elif isinstance(graph, ScoreGraph):
-    #     raise NotImplementedError("To undirected is not Implemented for ScoreGraph.")
+    """
+    Add reverse edges to the graph.
+
+    Parameters
+    ----------
+    graph : HeteroData
+        The graph object.
+    mode : str
+        The mode of adding reverse edges. Either 'new_type' or 'undirected'.
+    """
+    if mode == "new_type":
+        # add reversed consecutive edges
+        graph["note", "consecutive_rev", "note"].edge_index = graph[
+            "note", "consecutive", "note"
+        ].edge_index[[1, 0]]
+        # add reversed during edges
+        graph["note", "during_rev", "note"].edge_index = graph[
+            "note", "during", "note"
+        ].edge_index[[1, 0]]
+        # add reversed rest edges
+        graph["note", "rest_rev", "note"].edge_index = graph[
+            "note", "rest", "note"
+        ].edge_index[[1, 0]]
+    elif mode == "undirected":
+        graph = ToUndirected()(graph)
     else:
-        if mode == "new_type":
-            # add reversed consecutive edges
-            graph["note", "consecutive_rev", "note"].edge_index = graph[
-                "note", "consecutive", "note"
-            ].edge_index[[1, 0]]
-            # add reversed during edges
-            graph["note", "during_rev", "note"].edge_index = graph[
-                "note", "during", "note"
-            ].edge_index[[1, 0]]
-            # add reversed rest edges
-            graph["note", "rest_rev", "note"].edge_index = graph[
-                "note", "rest", "note"
-            ].edge_index[[1, 0]]
-        elif mode == "undirected":
-            graph = ToUndirected()(graph)
-        else:
-            raise ValueError("mode must be either 'new_type' or 'undirected'")
+        raise ValueError("mode must be either 'new_type' or 'undirected'")
     return graph
 
 
@@ -385,7 +170,37 @@ def add_beat_nodes(note_array):
 
     return beat_cluster, beat_index, beat_edges
 
-def create_score_graph(features, note_array, sort=False, add_reverse=True, measures=None, add_beats=False):
+
+def create_score_graph(
+        features: Union[np.ndarray, torch.Tensor],
+        note_array: np.ndarray,
+        sort: bool=False,
+        add_reverse: bool= True,
+        measures: Union[Optional, List[spt.Measure]] = None,
+        add_beats: bool = False) -> HeteroData:
+    """Create a score graph from note array.
+
+    Parameters
+    ----------
+    features : Union[np.ndarray, torch.Tensor]
+        The feature matrix, in the shape of (num_nodes, num_features).
+    note_array : np.ndarray
+        The note array object, it is a structured array and needs to contain the following fields:
+        onset_div, duration_div, pitch.
+    sort : bool, optional
+        Whether to sort the note array, by default False.
+    add_reverse : bool, optional
+        Whether to add reverse edges, by default True.
+    measures : Union[Optional, List[spt.Measure]], optional
+        The measure objects, by default None.
+    add_beats : bool, optional
+        Whether to add beat nodes, by default False.
+
+    Returns
+    -------
+    graph : HeteroData
+        The score graph.
+    """
     if sort:
         note_array = np.sort(note_array, order=["onset_div", "pitch"])
 
