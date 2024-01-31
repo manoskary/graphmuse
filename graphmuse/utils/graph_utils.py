@@ -3,6 +3,7 @@ from scipy.sparse.linalg import eigs
 import torch
 import numpy as np
 import graphmuse.samplers as sam
+from .graph import create_score_graph
 
 
 def degree(edge_index, num_nodes):
@@ -61,3 +62,37 @@ def edges_from_note_array(note_array, gtype="heterogeneous"):
         # concatenate edge types to edge list
         edge_list = np.concatenate((edge_list, edge_types.reshape(1, -1)), axis=0)
     return edge_list
+
+
+def create_random_music_graph(graph_size, min_duration, max_duration):
+    """
+    Create a random score graph with random features
+
+    The graph is created with 4 instruments, each with a random number of notes.
+
+    Parameters
+    ----------
+    graph_size : int
+        The number of nodes in the graph.
+    min_duration : int
+        The minimum duration of a note in the graph.
+    max_duration : int
+        The maximum duration of a note in the graph.
+    """
+    num_notes_per_voice = graph_size // 4
+    dur = np.random.randint(min_duration, max_duration, size=(4, num_notes_per_voice))
+    ons = np.cumsum(np.concatenate((np.zeros((4, 1)), dur), axis=1), axis=1)[:, :-1]
+    dur = dur.flatten()
+    ons = ons.flatten()
+
+    pitch = np.row_stack((np.random.randint(70, 80, size=(1, num_notes_per_voice)),
+                          np.random.randint(50, 60, size=(1, num_notes_per_voice)),
+                          np.random.randint(60, 70, size=(1, num_notes_per_voice)),
+                          np.random.randint(40, 50, size=(1, num_notes_per_voice)))).flatten()
+    note_array = np.vstack((ons, dur, pitch))
+    # transform to structured array
+    note_array = np.core.records.fromarrays(note_array, names='onset_div,duration_div,pitch')
+    # create features array of shape (num_nodes, num_features)
+    features = np.random.rand(len(note_array), 10)
+    graph = create_score_graph(features, note_array, sort=True, add_reverse=True)
+    return graph
