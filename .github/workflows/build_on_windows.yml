@@ -1,6 +1,9 @@
 run-name: Build on Windows by @${{ github.actor }}
 
-on: [push]
+on:
+  push:
+    branches:
+        - main
 
 jobs:
   build:
