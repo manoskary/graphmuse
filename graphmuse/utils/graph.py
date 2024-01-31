@@ -152,7 +152,7 @@ def add_beat_nodes(note_array):
     if note_array["onset_beat"].min() < 0:
         note_array["onset_beat"] = note_array["onset_beat"] - note_array["onset_beat"].min()
 
-    nodes = np.arange(int(note_array["onset_beat"].max()))
+    nodes = np.arange(int(note_array["onset_beat"].max())+1)
     # Add new attribute to hg
     beat_cluster = np.zeros(len(note_array), dtype=np.int32) - 1
     edges = []
@@ -176,7 +176,7 @@ def create_score_graph(
         note_array: np.ndarray,
         sort: bool=False,
         add_reverse: bool= True,
-        measures: Union[Optional, List[spt.Measure]] = None,
+        measures: Optional[List[spt.Measure]] = None,
         add_beats: bool = False) -> HeteroData:
     """Create a score graph from note array.
 
