@@ -1,15 +1,14 @@
 import numpy as np
-# from cython_graph import GraphFromAdj
 import torch
 from numpy.lib import recfunctions as rfn
 import os
 import random
 import string
 import pickle
-from .general import MapDict
 import warnings
 import graphmuse.samplers as csamplers
 from torch_geometric.data import HeteroData
+from torch_geometric.transforms import ToUndirected
 
 
 class HeteroScoreGraph(object):
@@ -311,7 +310,7 @@ def add_reverse_edges(graph, mode):
                 "note", "rest", "note"
             ].edge_index[[1, 0]]
         elif mode == "undirected":
-            graph = pyg.transforms.ToUndirected()(graph)
+            graph = ToUndirected()(graph)
         else:
             raise ValueError("mode must be either 'new_type' or 'undirected'")
     return graph
@@ -331,59 +330,62 @@ def add_reverse_edges_from_edge_index(edge_index, edge_type, mode="new_type"):
     return edge_index, edge_type
 
 
+def add_measure_nodes(measures, note_array):
+    """Add virtual nodes for every measure"""
+    assert "onset_div" in note_array.dtype.names, "Note array must have 'onset_div' field to add measure nodes."
+    if not isinstance(measures, np.ndarray):
+        measures = np.array([[m.start.t, m.end.t] for m in measures])
+    measure_cluster = np.zeros(len(note_array), dtype=np.int32) - 1
+    # if not hasattr(self, "beat_nodes"):
+    #     self.add_beat_nodes()
+    nodes = np.arange(len(measures))
+    # Add new attribute to hg
+    edges = []
+    for i in range(len(measures)):
+        idx = np.where(
+            (note_array["onset_div"] >= measures[i, 0]) & (note_array["onset_div"] < measures[i, 1]))[0]
+        if idx.size:
+            measure_cluster[idx] = i
+            edges.append(np.vstack((idx, np.full(idx.size, i))))
+    num_measures = len(measures)
+    measure_cluster = measure_cluster
+    measure_edges = np.hstack(edges)
+    # Warn if all edges is empty
+    if measure_edges.size == 0:
+        warnings.warn(
+            f"No edges found for measure nodes. Check that the note array has the 'onset_div' field on score.")
 
-def node_subgraph(graph, nodes, include_measures=False):
-    """
-    Extract subgraph given a list of node indices.
+    # Verify that every note has a measure
+    assert np.all(measure_cluster != -1), "Not all notes have a measure."
 
-    Parameters
-    ----------
-    graph : dict or HeteroScoreGraph
-    nodes : torch.Tensor
-        List of node indices.
+    return measure_cluster, measure_edges, num_measures
 
-    Returns
-    -------
-    out : dict
-    """
-    out = dict()
-    graph = MapDict(graph) if isinstance(graph, dict) else graph
-    assert torch.arange(graph.x.shape[0]).max() >= nodes.max(), "Node indices must be smaller than the number of nodes in the graph."
-    nodes_min = nodes.min()
-    edge_indices = torch.isin(graph.edge_index[0], nodes) & torch.isin(
-        graph.edge_index[1], nodes)
-    out["x"] = graph.x[nodes]
-    out["edge_index"] = graph.edge_index[:, edge_indices] - nodes_min
-    out["y"] = graph.y[nodes] if graph.y.shape[0] == graph.x.shape[0] else graph.y
-    out["edge_type"] = graph.edge_type[edge_indices]
-    out["note_array"] = structured_to_unstructured(
-        graph.note_array[
-            ["pitch", "onset_div", "duration_div", "onset_beat", "duration_beat", "ts_beats"]]
-    )[indices] if isinstance(graph, HeteroScoreGraph) else graph.note_array[nodes]
-    out["name"] = graph.name
-    if include_measures:
-        measure_edges = torch.tensor(graph.measure_edges)
-        measure_nodes = torch.tensor(graph.measure_nodes).squeeze()
-        beat_edges = torch.tensor(graph.beat_edges)
-        beat_nodes = torch.tensor(graph.beat_nodes).squeeze()
-        beat_edge_indices = torch.isin(beat_edges[0], nodes)
-        beat_node_indices = torch.isin(beat_nodes, torch.unique(beat_edges[1][beat_edge_indices]))
-        min_beat_idx = torch.where(beat_node_indices)[0].min()
-        max_beat_idx = torch.where(beat_node_indices)[0].max()
-        measure_edge_indices = torch.isin(measure_edges[0], nodes)
-        measure_node_indices = torch.isin(measure_nodes, torch.unique(measure_edges[1][measure_edge_indices]))
-        min_measure_idx = torch.where(measure_node_indices)[0].min()
-        max_measure_idx = torch.where(measure_node_indices)[0].max()
-        out["beat_nodes"] = beat_nodes[min_beat_idx:max_beat_idx + 1] - min_beat_idx
-        out["beat_edges"] = torch.vstack(
-            (beat_edges[0, beat_edge_indices] - nodes_min, beat_edges[1, beat_edge_indices] - min_beat_idx))
-        out["measure_nodes"] = measure_nodes[min_measure_idx:max_measure_idx + 1] - min_measure_idx
-        out["measure_edges"] = torch.vstack((measure_edges[0, measure_edge_indices] - nodes_min,
-                                             measure_edges[1, measure_edge_indices] - min_measure_idx))
-    return out
+def add_beat_nodes(note_array):
+    """Add virtual nodes for every beat"""
+    assert "onset_beat" in note_array.dtype.names, "Note array must have 'onset_beat' field to add measure nodes."
+    # when the onset_beat has negative values, we need to shift all the values to be positive
+    if note_array["onset_beat"].min() < 0:
+        note_array["onset_beat"] = note_array["onset_beat"] - note_array["onset_beat"].min()
 
+    nodes = np.arange(int(note_array["onset_beat"].max()))
+    # Add new attribute to hg
+    beat_cluster = np.zeros(len(note_array), dtype=np.int32) - 1
+    edges = []
+    for b in nodes:
+        idx = np.where((note_array["onset_beat"] >= b) & (note_array["onset_beat"] < b + 1))[0]
+        if idx.size:
+            edges.append(np.vstack((idx, np.full(idx.size, b))))
+            beat_cluster[idx] = b
+    beat_index = nodes
+    beat_edges = np.hstack(edges)
+    # Warn if all edges is empty
+    if beat_edges.size == 0:
+        warnings.warn(
+            f"No edges found for beat nodes. Check that the note array has the 'onset_beat' field on score.")
 
-def create_score_graph(features, note_array, sort=False, add_reverse=True):
+    return beat_cluster, beat_index, beat_edges
+
+def create_score_graph(features, note_array, sort=False, add_reverse=True, measures=None, add_beats=False):
     if sort:
         note_array = np.sort(note_array, order=["onset_div", "pitch"])
 
@@ -411,5 +413,17 @@ def create_score_graph(features, note_array, sort=False, add_reverse=True):
 
     if add_reverse:
         graph = add_reverse_edges(graph, mode="new_type")
+
+    if measures is not None:
+        measure_cluster, measure_edges, num_measures = add_measure_nodes(measures, note_array)
+        graph["note"].measure_cluster = torch.from_numpy(measure_cluster)
+        graph["note", "connects", "measure"].edge_index = torch.from_numpy(measure_edges)
+        graph["measure"].index = torch.arange(num_measures)
+
+    if add_beats:
+        beat_cluster, beat_index, beat_edges = add_beat_nodes(note_array)
+        graph["note"].beat_cluster = torch.from_numpy(beat_cluster)
+        graph["note", "connects", "beat"].edge_index = torch.from_numpy(beat_edges)
+        graph["beat"].index = torch.from_numpy(beat_index)
 
     return graph
