@@ -5,9 +5,6 @@ import numpy
 
 
 dirname = os.path.dirname(__file__)
-graph = [os.path.join(dirname, "graphmuse", "utils", x) for x in ["cython_graph.pyx", "cython_utils.pyx", "cython_sampler.pyx"]]
-# module = setuptools.Extension('graph', sources=[graph])
-# module = cythonize(graph)
 
 if os.name=='posix':
     eca = ["-std=c11"]
