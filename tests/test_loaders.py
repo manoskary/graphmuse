@@ -1,6 +1,7 @@
 from graphmuse.loader import MuseNeighborLoader
 import numpy as np
-from graphmuse.samplers import compute_edge_list, c_set_seed
+from graphmuse.samplers import c_set_seed
+from graphmuse.utils import create_score_graph
 import torch
 from torch_geometric.data import HeteroData
 
@@ -17,7 +18,7 @@ min_nodes = 100
 max_dur = 20
 min_dur = 1
 subgraph_size = 100
-subgraphs = 10
+batch_size = 10
 
 graphs = list()
 for i in range(num_graphs):
@@ -34,38 +35,12 @@ for i in range(num_graphs):
     note_array = np.vstack((ons, dur, pitch))
     # transform to structured array
     note_array = np.core.records.fromarrays(note_array, names='onset_div,duration_div,pitch')
-    # sort by onset and then by pitch
-    note_array = np.sort(note_array, order=['onset_div', 'pitch'])
-    edges, edge_types = compute_edge_list(note_array['onset_div'].astype(np.int32),
-                                          note_array['duration_div'].astype(np.int32))
-
-    # sort edges
-    resort_idx = np.lexsort((edges[0], edges[1]))
-    edges = edges[:, resort_idx]
-
-    edge_types = edge_types[resort_idx]
-    # create features
-    features = np.random.rand(note_array.shape[0], 10)
-    # create graph
-    # new_edges = np.vstack((edges, edge_types))
-    edge_etypes = {
-        0: "onset",
-        1: "consecutive",
-        2: "duration",
-        3: "rest"
-    }
-    edges = torch.from_numpy(edges).long()
-    edge_types = torch.from_numpy(edge_types).long()
-    graph = HeteroData()
-    graph["note"].x = torch.from_numpy(features).float()
-    graph["note"].onset_div = torch.from_numpy(note_array['onset_div']).long()
-    graph["note"].duration_div = torch.from_numpy(note_array['duration_div']).long()
-    graph["note"].pitch = torch.from_numpy(note_array['pitch']).long()
-    for k, v in edge_etypes.items():
-        graph['note', v, 'note'].edge_index = edges[:, edge_types == k]
+    # create features array of shape (num_nodes, num_features)
+    features = np.random.rand(len(note_array), 10)
+    graph = create_score_graph(features, note_array, sort=True, add_reverse=True)
     graphs.append(graph)
 
 # create dataloader
-dataloader = MuseNeighborLoader(graphs, subgraph_size=50, batch_size=4, num_neighbors=[3, 3])
+dataloader = MuseNeighborLoader(graphs, subgraph_size=subgraph_size, batch_size=batch_size, num_neighbors=[3, 3])
 batch = next(iter(dataloader))
 print(batch)

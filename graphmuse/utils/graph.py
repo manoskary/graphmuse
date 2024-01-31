@@ -281,18 +281,6 @@ def edges_from_note_array(note_array):
     return edges
 
 
-def graph_from_notearray(note_array, cython=True):
-    if cython:
-        edges = GraphFromAdj(
-            np.ascontiguousarray(note_array["onset_beat"], np.float32),
-            np.ascontiguousarray(note_array["duration_beat"], np.float32),
-            np.ascontiguousarray(note_array["pitch"], np.float32),
-            4).process()
-    else:
-        edges = graph_from_note_array(note_array)
-    return edges
-
-
 def add_reverse_edges(graph, mode):
     if isinstance(graph, HeteroScoreGraph):
         if mode == "new_type":
@@ -395,25 +383,33 @@ def node_subgraph(graph, nodes, include_measures=False):
     return out
 
 
-# if __name__ == '__main__':
-#     import partitura as pt
-#     from timeit import default_timer as timer
-#
-#     score_dir = "/home/manos/Desktop/JKU/data/test.musicxml"
-#     note_array = pt.load_score(score_dir).note_array()
-#
-#     # lst = []
-#     # for i in range(10):
-#     #     start = timer()
-#     #     graph_from_notearray(note_array, cython=False)
-#     #     end = timer()
-#     #     lst.append(end-start)
-#     # print("Python Code: ", sum(lst) / len(lst))
-#
-#     lst = []
-#     for i in range(10):
-#         start = timer()
-#         graph_from_notearray(note_array, cython=True)
-#         end = timer()
-#         lst.append(end - start)
-#     print("Cython Code: ", sum(lst) / len(lst))
+def create_score_graph(features, note_array, sort=False, add_reverse=True):
+    if sort:
+        note_array = np.sort(note_array, order=["onset_div", "pitch"])
+
+    edges, edge_types = csamplers.compute_edge_list(
+        note_array['onset_div'].astype(np.int32),
+        note_array['duration_div'].astype(np.int32))
+
+    # create graph
+    # new_edges = np.vstack((edges, edge_types))
+    edge_etypes = {
+        0: "onset",
+        1: "consecutive",
+        2: "during",
+        3: "rest"
+    }
+    edges = torch.from_numpy(edges).long()
+    edge_types = torch.from_numpy(edge_types).long()
+    graph = HeteroData()
+    graph["note"].x = torch.from_numpy(features).float() if isinstance(features, np.ndarray) else features.float()
+    graph["note"].onset_div = torch.from_numpy(note_array['onset_div']).long()
+    graph["note"].duration_div = torch.from_numpy(note_array['duration_div']).long()
+    graph["note"].pitch = torch.from_numpy(note_array['pitch']).long()
+    for k, v in edge_etypes.items():
+        graph['note', v, 'note'].edge_index = edges[:, edge_types == k]
+
+    if add_reverse:
+        graph = add_reverse_edges(graph, mode="new_type")
+
+    return graph

@@ -75,6 +75,9 @@ class MuseNeighborLoader(DataLoader):
         r"""Samples a subgraph from a batch of input nodes."""
         data_list = []
         for data in data_batch:
+            if data["note"].num_nodes <= self.subgraph_size:
+                data_list.append(data)
+                continue
             # sample nodes
             target_nodes = random_score_region_torch(data, self.subgraph_size, node_type="note")
             # Convert the graph data into CSC format for sampling:
