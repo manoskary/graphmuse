@@ -231,14 +231,20 @@ def create_score_graph(
 
     if measures is not None:
         measure_cluster, measure_edges, num_measures = add_measure_nodes(measures, note_array)
-        graph["note"].measure_cluster = torch.from_numpy(measure_cluster)
+        graph["note"].measure_cluster = torch.from_numpy(measure_cluster).long()
         graph["note", "connects", "measure"].edge_index = torch.from_numpy(measure_edges)
-        graph["measure"].index = torch.arange(num_measures)
+        graph["measure"].index = torch.arange(num_measures).long()
+        # scatter note_features to measure_features based on measure_cluster
+        graph["measure"].x = torch.zeros(graph["measure"].index.shape[0], graph["note"].x.shape[1])
+        graph["measure"].x.scatter_add_(0, graph["note"].measure_cluster.unsqueeze(-1).expand(-1, graph["note"].x.shape[1]), graph["note"].x)
 
     if add_beats:
         beat_cluster, beat_index, beat_edges = add_beat_nodes(note_array)
-        graph["note"].beat_cluster = torch.from_numpy(beat_cluster)
+        graph["note"].beat_cluster = torch.from_numpy(beat_cluster).long()
         graph["note", "connects", "beat"].edge_index = torch.from_numpy(beat_edges)
-        graph["beat"].index = torch.from_numpy(beat_index)
+        graph["beat"].index = torch.from_numpy(beat_index).long()
+        # scatter note_features to beat_features based on beat_cluster
+        graph["beat"].x = torch.zeros(graph["beat"].index.shape[0], graph["note"].x.shape[1])
+        graph["beat"].x.scatter_add_(0, graph["note"].beat_cluster.unsqueeze(-1).expand(-1, graph["note"].x.shape[1]), graph["note"].x)
 
     return graph

@@ -3,6 +3,8 @@ import os
 import partitura as pt
 import numpy as np
 import graphmuse.samplers as sam
+from graphmuse.utils import create_score_graph
+
 
 def edges_from_note_array(note_array):
     '''Turn note_array to list of edges.
@@ -71,3 +73,17 @@ class TestGraphMuse(unittest.TestCase):
         self.assertTrue((edges_c==edges_python).all())
         
         print("Edgle list creation assertions passed")
+
+    def test_graph_creation(self):
+        part = pt.load_score(pt.EXAMPLE_MUSICXML)[0]
+        note_array = part.note_array()
+        measures = part.measures
+        features = np.random.rand(len(note_array), 10)
+        graph = create_score_graph(features, note_array, measures=measures, add_beats=True)
+        self.assertTrue(graph["note"].num_nodes == len(note_array))
+        self.assertTrue(graph["beat"].num_nodes == int(note_array["onset_beat"].max()) + 1)
+        self.assertTrue(graph["measure"].num_nodes == len(measures))
+        self.assertTrue(graph.num_edges == 15)
+
+
+
