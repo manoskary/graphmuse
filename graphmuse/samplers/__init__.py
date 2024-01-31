@@ -1,6 +1,9 @@
 from .csamplers import *
 import numpy
 import torch
+from .base_samplers import SubgraphMultiplicitySampler
+from .sampler_functions import random_score_region_torch
+
 
 def graph(edges):
 	"""
@@ -53,7 +56,7 @@ def sample_nodewise(cgraph, depth, samples_per_node, targets):
 	return samples_per_layer, edges_between_layers, load_per_layer, total_samples
 
 
-def random_score_region(note_array, budget):
+def random_score_region(note_onsets, budget):
 	"""
 	Python wrapper function for C Extension function c_random_score_region
 
@@ -61,7 +64,7 @@ def random_score_region(note_array, budget):
 
 	Parameters
 	----------
-	note_array : partitura/numpy.structured array
+	note_onsets : array/tensor int
 		This represents a score graph, as in, the data in this structure determines the edges between nodes
 		required fields: onset_div, duration_div
 		note_array['onset_div'] is a non-decreasing integer array
@@ -74,7 +77,9 @@ def random_score_region(note_array, budget):
 	region : tuple
 		The region to sample from. It is a tuple of two integers, start and end.
 	"""
-	onsets = note_array["onset_div"].astype(numpy.int32)
+	if isinstance(note_onsets, torch.Tensor):
+		note_onsets = note_onsets.numpy()
+	onsets = note_onsets.astype(numpy.int32)
 	_,unique_onset_indices = numpy.unique(onsets, return_index=True)
 
 	unique_onset_indices = unique_onset_indices.astype(numpy.int32)
@@ -82,7 +87,7 @@ def random_score_region(note_array, budget):
 	if len(onsets) - unique_onset_indices[-1] > budget and (numpy.diff(unique_onset_indices)>budget).all():
 		raise ValueError("impossible to sample a score region with the given budget within given note array")
 
-	return c_random_score_region(onsets,unique_onset_indices, budget)
+	return c_random_score_region(onsets, unique_onset_indices, budget)
 
 
 def extend_score_region_via_neighbor_sampling(cgraph, note_array, region, samples_per_node, sample_rightmost=True):
