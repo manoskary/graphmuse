@@ -1,6 +1,4 @@
 import torch
-from torch.utils.data import DataLoader
-from torch_geometric.data import Data, Batch
 
 
 def random_score_region_torch(graph, budget, node_type="note"):
@@ -27,19 +25,6 @@ def random_score_region_torch(graph, budget, node_type="note"):
         return {node_type: out}
 
 
-if __name__ == '__main__':
-    graphs = list()
-    for i in range(10):
-        onsets = torch.cumsum(torch.randint(0, 10, (50,)), dim=0)
-        x = torch.randn(50, 10)
-        edge_index = torch.randint(0, 50, (2, 100))
-        graph = Data(x=x, edge_index=edge_index, onset_div=onsets)
-        graphs.append(graph)
-
-    batch = Batch.from_data_list(graphs)
-
-
-    print(batch)
 
 
 
