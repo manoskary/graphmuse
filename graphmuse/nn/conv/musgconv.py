@@ -1,10 +1,10 @@
 import torch.nn as nn
 import torch
-from torch_geometric.nn import MessagePassing
+from torch_geometric.nn import MessagePassing, MessageNorm
 
 
 class MusGConv(MessagePassing):
-    def __init__(self, in_channels, out_channels, in_edge_channels=0, bias=True, return_edge_emb=False, **kwargs):
+    def __init__(self, in_channels, out_channels, in_edge_channels=0, bias=True, return_edge_emb=False, norm_msg=False, **kwargs):
         super().__init__(aggr='add')
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -12,6 +12,7 @@ class MusGConv(MessagePassing):
         self.aggregation = kwargs.get("aggregation", "cat")
         self.in_edge_channels = in_edge_channels if in_edge_channels > 0 else in_channels
         self.lin = nn.Linear(in_channels, out_channels)
+        self.msg_norm = MessageNorm() if norm_msg else nn.Identity()
         self.edge_mlp = nn.Sequential(
             nn.Linear(self.in_edge_channels, out_channels),
             nn.ReLU(),
@@ -46,11 +47,14 @@ class MusGConv(MessagePassing):
 
     def message(self, x_j, edge_attr):
         if self.aggregation == "cat":
-            return torch.cat((x_j, edge_attr), dim=-1)
+            msg = torch.cat((x_j, edge_attr), dim=-1)
         elif self.aggregation == "add":
-            return x_j + edge_attr
+            msg = x_j + edge_attr
         elif self.aggregation == "mul":
-            return x_j * edge_attr
+            msg = x_j * edge_attr
         else:
             raise ValueError("Aggregation type not supported")
+
+        msg = self.msg_norm(x_j, msg)
+        return msg
 
