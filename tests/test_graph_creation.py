@@ -81,7 +81,7 @@ class TestGraphMuse(unittest.TestCase):
         self.assertTrue(graph["note"].num_nodes == len(note_array))
         self.assertTrue(graph["beat"].num_nodes == int(note_array["onset_beat"].max()) + 1)
         self.assertTrue(graph["measure"].num_nodes == len(measures))
-        self.assertTrue(graph.num_edges == 15)
+        self.assertTrue(graph.num_edges == 23)
 
 
 
