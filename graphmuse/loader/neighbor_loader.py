@@ -40,6 +40,7 @@ class MuseNeighborLoader(DataLoader):
             filter_per_worker = infer_filter_per_worker(graphs)
 
         self.graphs = graphs
+        self.metadata = graphs[0].metadata()
         self.num_neighbors = num_neighbors
         self.subgraph_size = subgraph_size
         self.transform = transform

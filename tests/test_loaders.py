@@ -56,25 +56,16 @@ class TestMuseNeighborLoader(TestCase):
                 graph_size=l, min_duration=min_dur, max_duration=max_dur, feature_size=feature_size, add_beat_nodes=True)
             graphs.append(graph)
 
+        metadata = graph.metadata()
         # create dataloader
         dataloader = MuseNeighborLoader(graphs, subgraph_size=subgraph_size, batch_size=batch_size,
                                         num_neighbors=[3, 3])
-        metadata = (["note", "beat"], [
-            ("note", "onset", "note"),
-            ("note", "consecutive", "note"),
-            ("note", "rest", "note"),
-            ("note", "during", "note"),
-            ("note", "consecutive_rev", "note"),
-            ("note", "rest_rev", "note"),
-            ("note", "during_rev", "note"),
-            ("note", "connects", "beat"),
-            ("beat", "connects", "note"),
-            ("beat", "next", "beat"),
-        ])
-        model = to_hetero(GNN(feature_size, 20, 2), metadata)
+
+
         batch = next(iter(dataloader))
 
-        # input to the model
+        # input to a model
+        model = to_hetero(GNN(feature_size, 20, 2), batch.metadata())
         out = model(batch.x_dict, batch.edge_index_dict)
         batch["note"].x = out["note"]
         target_outputs = torch.cat([data["note"].x[:subgraph_size] for data in batch.to_data_list()], dim=0)
