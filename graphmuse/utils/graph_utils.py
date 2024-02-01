@@ -64,7 +64,7 @@ def edges_from_note_array(note_array, gtype="heterogeneous"):
     return edge_list
 
 
-def create_random_music_graph(graph_size, min_duration, max_duration):
+def create_random_music_graph(graph_size, min_duration, max_duration, add_beat_nodes=True):
     """
     Create a random score graph with random features
 
@@ -94,5 +94,5 @@ def create_random_music_graph(graph_size, min_duration, max_duration):
     note_array = np.core.records.fromarrays(note_array, names='onset_div,duration_div,pitch')
     # create features array of shape (num_nodes, num_features)
     features = np.random.rand(len(note_array), 10)
-    graph = create_score_graph(features, note_array, sort=True, add_reverse=True)
+    graph = create_score_graph(features, note_array, sort=True, add_reverse=True, add_beats=add_beat_nodes)
     return graph

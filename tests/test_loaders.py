@@ -27,7 +27,8 @@ class TestMuseNeighborLoader(TestCase):
         graphs = list()
         for i in range(num_graphs):
             l = np.random.randint(min_nodes, max_nodes)
-            graph = create_random_music_graph(graph_size=l, min_duration=min_dur, max_duration=max_dur)
+            graph = create_random_music_graph(
+                graph_size=l, min_duration=min_dur, max_duration=max_dur, add_beat_nodes=True)
             graphs.append(graph)
 
         # create dataloader
