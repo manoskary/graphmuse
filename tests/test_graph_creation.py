@@ -61,15 +61,10 @@ class TestGraphMuse(unittest.TestCase):
         score = pt.load_score(score_path)
         note_array = score.note_array()
         edges_python = np.sort(edges_from_note_array(note_array))
-
         edge_list, edge_types = sam.compute_edge_list(note_array['onset_div'].astype(np.int32), note_array['duration_div'].astype(np.int32))
-
         edges_c = np.sort(edge_list)
-
         self.assertTrue(edges_c.shape==edges_python.shape)
-
         self.assertTrue((edges_c==edges_python).all())
-        
         print("Edgle list creation assertions passed")
 
     def test_graph_creation(self):
