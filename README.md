@@ -19,21 +19,44 @@ Modules of the library contain implementations of the following models:
 
 ### Dependencies
 
-GraphMuse is built on top of PyTorch. Some additional dependencies are required to run the code:
+GraphMuse is built on top of PyTorch and Pytorch Geometric. Some additional dependencies are required to run the code:
 - PyTorch Sparse
 - PyTorch Scatter
 
 
 ## Installation
 
+To install Graphmuse you first need to install the Pytorch version suitable for your system.
+You can find the instructions [here](https://pytorch.org/get-started/locally/).
+
+You also need to install Pytorch Geometric. You can find the instructions [here](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html).
+We recommend to use conda:
+```shell
+conda install conda install pyg -c pyg
+```
+
+You can install graphmuse along with the dependencies using pip:
 ```shell
 pip install graphmuse
 ```
 
-To install using the setup file do:
+
+
+Or use pip for the rest of the dependencies:
+```shell
+pip install --verbose git+https://github.com/pyg-team/pyg-lib.git
+pip install --verbose torch_scatter
+pip install --verbose torch_sparse
+pip install --verbose torch_cluster
+pip install partitura
+```
+
+and install using the setup file:
 ```shell
 python setup.py build_ext -i
 ```
+
+
 
 ## Usage
 
@@ -42,12 +65,11 @@ python setup.py build_ext -i
 import graphmuse.nn as gmnn
 import torch
 
-conv = gmnn.SageConv(10, 10)
-adj = torch.Tensor(
-	[[0, 1, 0],
-	 [1, 0, 1],
-	 [0, 0, 1]])
+conv = gmnn.MusGConv(10, 10, 10)
+edge_index = torch.tensor([[0, 1, 1, 2],
+                           [1, 0, 2, 1]], dtype=torch.long)
 x = torch.rand((3, 10))
-h = conv(adj, x)
+edge_features = torch.rand((4, 10))
+h = conv(x, edge_index, edge_features)
 ```
 
