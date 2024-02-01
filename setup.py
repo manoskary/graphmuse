@@ -10,11 +10,11 @@ if os.name=='posix':
     eca = ["-std=c11"]
     eca.append("-DPOSIX")
 
-    from psutil import cpu_count
-
-    thread_count = cpu_count(logical=False)
-    if thread_count > 1:
-        eca.append(f"-DThread_Count_Arg={thread_count}")
+    # from psutil import cpu_count
+    #
+    # thread_count = cpu_count(logical=False)
+    # if thread_count > 1:
+    #     eca.append(f"-DThread_Count_Arg={thread_count}")
 
 
 elif sys.platform.startswith('win'):
