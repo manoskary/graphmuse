@@ -21,16 +21,15 @@ def random_score_region_torch(graph, budget, node_type="note"):
         # if max_index
         if max_index > max_budget_index:
             max_index = max_index_candidates.min() - 1
-        note_out = torch.arange(min_index, max_index, dtype=torch.long)
-        out = {"note": note_out}
-        if node_type == "note":
-            # fetch score section for beats and measures too, if they are included in the graph.
-            if "beat" in graph.node_types:
-                beats = graph["note"].beat_cluster[note_out]
-                out["beat"] = torch.arange(beats.min(), beats.max(), dtype=torch.long)
-            if "measure" in graph.node_types:
-                beats = graph["note"].measure_cluster[note_out]
-                out["beat"] = torch.arange(beats.min(), beats.max(), dtype=torch.long)
+        selected_out = torch.arange(min_index, max_index, dtype=torch.long)
+        out = {"note": selected_out}
+        # fetch score section for beats and measures too, if they are included in the graph.
+        if "beat" in graph.node_types:
+            beats = graph["note"].beat_cluster[selected_out]
+            out["beat"] = torch.arange(beats.min(), beats.max(), dtype=torch.long)
+        if "measure" in graph.node_types:
+            beats = graph["note"].measure_cluster[selected_out]
+            out["beat"] = torch.arange(beats.min(), beats.max(), dtype=torch.long)
         return out
 
 
