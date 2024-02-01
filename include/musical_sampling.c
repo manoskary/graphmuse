@@ -2,6 +2,7 @@ static PyObject* random_score_region(PyObject* csamplers, PyObject* args){
 	PyArrayObject* np_onsets;
 	PyArrayObject* np_unique_onset_indices;
 	Index budget;
+	#define uint unsigned int
 
 	if(!PyArg_ParseTuple(args, "OOI", (PyObject**)&np_onsets, (PyObject**)&np_unique_onset_indices, (uint*)&budget)){
 		printf("If you don't provide proper arguments, you can't get a random score region.\nHow can you get a random score region if you don't provide proper arguments?\n");

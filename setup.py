@@ -1,4 +1,3 @@
-# cython: language_level=3
 import setuptools
 import os, sys
 import numpy
@@ -7,19 +6,29 @@ import numpy
 dirname = os.path.dirname(__file__)
 
 if os.name=='posix':
+    print("Compiling for POSIX systems. . .")
     eca = ["-std=c11"]
     eca.append("-DPOSIX")
 
-    #add flag to turn off debug mode (increasing speed)
-    #eca.append("-DGM_DEBUG_OFF")
-
     from psutil import cpu_count
-    thread_count = cpu_count(logical=False)
 
-    if thread_count>1:
+    thread_count = cpu_count(logical=False)
+    if thread_count > 1:
         eca.append(f"-DThread_Count_Arg={thread_count}")
+
+
 elif sys.platform.startswith('win'):
-    eca = ["-DWindows"]
+    print("Compiling for Windows. . .")
+    eca = ["/std:c11"]
+    eca.append("-DWindows")
+
+else:
+    raise Exception("Unsupported OS, please use Linux or Windows.")
+
+# add flag to turn off debug mode (increasing speed)
+eca.append("-DGM_DEBUG_OFF")
+
+
 
 ext_modules = [
     setuptools.Extension(
