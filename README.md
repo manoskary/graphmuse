@@ -14,7 +14,7 @@ It implements a variety of graph neural networks for music, including Graph Conv
 It also implements a variety of graph neural networks for music, including Graph Convolutional Networks (GCN), Graph Attention Networks (GAT), GraphSAGE, and Graph Isomorphism Networks (GIN).
 Modules of the library contain implementations of the following models:
 - Contrastive Graph Neural Networks similar to SimCLR;
-- Hierachical Graph Auto-Encoders with edge Polling;
+- Hierarchical Graph Auto-Encoders with edge Polling;
 - Hyperbolic Graph Neural Networks with Poincare Topology.
 
 ### Dependencies
@@ -55,8 +55,6 @@ and install using the setup file:
 ```shell
 python setup.py build_ext -i
 ```
-
-
 
 ## Usage
 

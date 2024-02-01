@@ -89,10 +89,13 @@ def create_random_music_graph(graph_size, min_duration, max_duration, add_beat_n
                           np.random.randint(50, 60, size=(1, num_notes_per_voice)),
                           np.random.randint(60, 70, size=(1, num_notes_per_voice)),
                           np.random.randint(40, 50, size=(1, num_notes_per_voice)))).flatten()
-    note_array = np.vstack((ons, dur, pitch))
+
+    beats = ons / 4
+    note_array = np.vstack((ons, dur, pitch, beats))
     # transform to structured array
-    note_array = np.core.records.fromarrays(note_array, names='onset_div,duration_div,pitch')
+    note_array = np.core.records.fromarrays(note_array, names='onset_div,duration_div,pitch,onset_beat')
     # create features array of shape (num_nodes, num_features)
     features = np.random.rand(len(note_array), 10)
+
     graph = create_score_graph(features, note_array, sort=True, add_reverse=True, add_beats=add_beat_nodes)
     return graph

@@ -38,6 +38,6 @@ class TestMuseNeighborLoader(TestCase):
         # check that the batch size is correct
         self.assertEqual(batch.num_graphs, batch_size, "The batch size is incorrect")
         # check that the number of nodes is correct
-        self.assertLessEqual(batch.num_nodes, 1175, "The number of nodes is incorrect")
+        self.assertLessEqual(batch.num_nodes, 1877, "The number of nodes is incorrect")
         # check that the number of edges is correct
-        self.assertLessEqual(batch.num_edges, 10647, "The number of edges is incorrect")
+        self.assertLessEqual(batch.num_edges, 13806, "The number of edges is incorrect")
