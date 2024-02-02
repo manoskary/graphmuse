@@ -3,7 +3,8 @@ import os
 import partitura as pt
 import numpy as np
 import graphmuse.samplers as sam
-from graphmuse.utils import create_score_graph
+from graphmuse.utils import create_score_graph, create_random_music_graph
+import time
 
 
 def edges_from_note_array(note_array):
@@ -77,6 +78,38 @@ class TestGraphMuse(unittest.TestCase):
         self.assertTrue(graph["beat"].num_nodes == int(note_array["onset_beat"].max()) + 1)
         self.assertTrue(graph["measure"].num_nodes == len(measures))
         self.assertTrue(graph.num_edges == 23)
+
+    def test_edge_creation_speed(self):
+        # create a random graph
+        max_nodes = 10000
+        num_notes_per_voice = max_nodes // 4
+        dur = np.random.randint(2, 16, size=(4, num_notes_per_voice))
+        ons = np.cumsum(np.concatenate((np.zeros((4, 1)), dur), axis=1), axis=1)[:, :-1]
+        dur = dur.flatten()
+        ons = ons.flatten()
+
+        pitch = np.row_stack((np.random.randint(70, 80, size=(1, num_notes_per_voice)),
+                              np.random.randint(50, 60, size=(1, num_notes_per_voice)),
+                              np.random.randint(60, 70, size=(1, num_notes_per_voice)),
+                              np.random.randint(40, 50, size=(1, num_notes_per_voice)))).flatten()
+
+        beats = ons / 4
+        note_array = np.vstack((ons, dur, pitch, beats))
+        # transform to structured array
+        note_array = np.core.records.fromarrays(note_array, names='onset_div,duration_div,pitch,onset_beat')
+
+        # create features array of shape (num_nodes, num_features)
+        time_baseline = time.time()
+        _ = edges_from_note_array(note_array)
+        time_baseline = time.time() - time_baseline
+
+        time_c = time.time()
+        _ = sam.compute_edge_list(note_array['onset_div'].astype(np.int32),
+                                                      note_array['duration_div'].astype(np.int32))
+        time_c = time.time() - time_c
+        print("Time for python edge list creation: ", time_baseline)
+        print("Time for C edge list creation: ", time_c)
+        self.assertTrue(time_c < time_baseline)
 
 
 
