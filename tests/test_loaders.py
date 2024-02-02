@@ -49,12 +49,15 @@ class TestMuseNeighborLoader(TestCase):
         subgraph_size = 50
         batch_size = 4
         feature_size = 10
+        labels = 4
 
         graphs = list()
         for i in range(num_graphs):
             l = np.random.randint(min_nodes, max_nodes)
             graph = create_random_music_graph(
                 graph_size=l, min_duration=min_dur, max_duration=max_dur, feature_size=feature_size, add_beat_nodes=True)
+            label = np.random.randint(0, labels, l)
+            graph["note"].y = torch.tensor(label, dtype=torch.long)
             graphs.append(graph)
 
         metadata = graph.metadata()
@@ -68,9 +71,12 @@ class TestMuseNeighborLoader(TestCase):
         # input to a model
         # model = to_hetero(GNN(feature_size, 20, 2), batch.metadata())
         model = MetricalGNN(feature_size, 64, 2, metadata)
+        loss = nn.CrossEntropyLoss()
         # out = model(batch.x_dict, batch.edge_index_dict)
         target_outputs = model(batch.x_dict, batch.edge_index_dict, batch["note"].batch, batch["beat"].batch, subgraph_size)
-
+        target_labels = torch.cat([data["note"].y[:subgraph_size] for data in batch.to_data_list()], dim=0)
+        loss = loss(target_outputs, target_labels)
+        print("The loss is: ", loss.item())
         # check that the batch size is correct
         self.assertEqual(batch.num_graphs, batch_size, "The batch size is incorrect")
         # check that the number of nodes is correct
