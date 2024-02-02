@@ -6,6 +6,7 @@ import torch
 from unittest import TestCase
 import torch.nn as nn
 from torch_geometric.nn import SAGEConv, to_hetero
+from graphmuse.nn.models.metrical_gnn import MetricalGNN
 
 
 # Standardize the random seed
@@ -65,10 +66,10 @@ class TestMuseNeighborLoader(TestCase):
         batch = next(iter(dataloader))
 
         # input to a model
-        model = to_hetero(GNN(feature_size, 20, 2), batch.metadata())
-        out = model(batch.x_dict, batch.edge_index_dict)
-        batch["note"].x = out["note"]
-        target_outputs = torch.cat([data["note"].x[:subgraph_size] for data in batch.to_data_list()], dim=0)
+        # model = to_hetero(GNN(feature_size, 20, 2), batch.metadata())
+        model = MetricalGNN(feature_size, 64, 2, metadata)
+        # out = model(batch.x_dict, batch.edge_index_dict)
+        target_outputs = model(batch.x_dict, batch.edge_index_dict, batch["note"].batch, batch["beat"].batch, subgraph_size)
 
         # check that the batch size is correct
         self.assertEqual(batch.num_graphs, batch_size, "The batch size is incorrect")
@@ -81,4 +82,4 @@ class TestMuseNeighborLoader(TestCase):
         # check that the number of edge types is correct
         self.assertEqual(len(batch.edge_types), 10, "The number of edge types is incorrect")
         # check that the output shape is correct for the target node type
-        self.assertEqual(target_outputs.shape, (batch_size*subgraph_size, 20), "The output shape is incorrect")
+        self.assertEqual(target_outputs.shape, (batch_size*subgraph_size, 64), "The output shape is incorrect")
