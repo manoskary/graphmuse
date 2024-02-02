@@ -58,7 +58,7 @@ python setup.py build_ext -i
 
 ## Usage
 
-**Convolution**
+### Convolution
 ```python
 import graphmuse.nn as gmnn
 import torch
@@ -71,3 +71,31 @@ edge_features = torch.rand((4, 10))
 h = conv(x, edge_index, edge_features)
 ```
 
+
+### Score Graphs
+
+```python
+import graphmuse as gm
+import partitura
+import torch
+
+score = partitura.load_musicxml('path_to_musicxml')
+note_array = score.note_array()
+feature_array = torch.rand((len(note_array), 10)) 
+score_graph = gm.create_score_graph(feature_array, note_array)
+print(score_graph)
+```
+
+### Sampling and Batching
+
+GraphMuse includes a dataloader for sampling and batching graphs together.
+It uses the node-wise sampling strategy for each graph and batching them together.
+You can specify the number of graphs to sample (`batch_size`) and the size of the subgraph to sample (`subgraph_size`).
+
+```python
+import graphmuse as gm
+
+scores_graphs = ["list of score graphs"]
+dataloader = gm.loader.MusGraphDataLoader(scores_graphs, num_neighbors=[3, 3], batch_size=32, subgraph_size=100)
+print(next(iter(dataloader)))
+```
