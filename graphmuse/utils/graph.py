@@ -185,6 +185,7 @@ def add_beat_nodes(note_array):
 def create_score_graph(
         features: Union[np.ndarray, torch.Tensor],
         note_array: np.ndarray,
+        labels: Optional[Union[np.ndarray, torch.Tensor]] = None,
         sort: bool=False,
         add_reverse: bool= True,
         measures: Optional[List[spt.Measure]] = None,
@@ -198,6 +199,8 @@ def create_score_graph(
     note_array : np.ndarray
         The note array object, it is a structured array and needs to contain the following fields:
         onset_div, duration_div, pitch.
+    labels : Union[np.ndarray, torch.Tensor], optional
+        The labels for the note nodes, by default None.
     sort : bool, optional
         Whether to sort the note array, by default False.
     add_reverse : bool, optional
@@ -231,6 +234,8 @@ def create_score_graph(
     edge_types = torch.from_numpy(edge_types).long()
     graph = HeteroData()
     graph["note"].x = torch.from_numpy(features).float() if isinstance(features, np.ndarray) else features.float()
+    if labels is not None:
+        graph["note"].y = torch.from_numpy(labels).long() if isinstance(labels, np.ndarray) else labels.long()
     graph["note"].onset_div = torch.from_numpy(note_array['onset_div']).long()
     graph["note"].duration_div = torch.from_numpy(note_array['duration_div']).long()
     graph["note"].pitch = torch.from_numpy(note_array['pitch']).long()
