@@ -5,13 +5,14 @@ from torch_geometric.data import Data, FeatureStore, GraphStore, HeteroData, Bat
 from graphmuse.samplers import random_score_region_torch, SubgraphMultiplicitySampler
 from torch_geometric.sampler.utils import to_csc, to_hetero_csc, remap_keys
 from typing import Any, Callable, Iterator, List, Optional, Tuple, Union, Dict
-from torch_geometric.typing import EdgeType, NodeType
+from torch_geometric.typing import EdgeType, NodeType, WITH_PYG_LIB
 from torch_geometric.loader.utils import (
     filter_data,
     infer_filter_per_worker,
     filter_hetero_data
 )
 from torch_geometric.sampler.base import NumNeighbors
+
 
 NumNeighborsType = Union[NumNeighbors, List[int], Dict[EdgeType, List[int]]]
 
@@ -90,18 +91,40 @@ class MuseNeighborLoader(DataLoader):
 
             row_dict = remap_keys(row_dict, to_rel_type)
             colptr_dict = remap_keys(colptr_dict, to_rel_type)
-            out = torch.ops.torch_sparse.hetero_neighbor_sample(
+            if WITH_PYG_LIB:
+                args = (
                     data.node_types,
                     data.edge_types,
                     colptr_dict,
                     row_dict,
-                    target_nodes,  # seed_dict
-                    self.num_neighbors.get_mapped_values(data.edge_types),
-                    self.num_neighbors.num_hops,
-                    False,
-                    False,
+                    target_nodes, # seed_dict
+                    self.num_neighbors.get_mapped_values(self.edge_types),
+                    self.node_time,
                 )
-            node, row, col, edge, batch = out + (None,)
+                args += (
+                    True,  # csc
+                    False, # do not replace
+                    True, # Subgraph not induced
+                    False, # not disjoint
+                    'uniform', # temporal strategy
+                    True,  # return_edge_id
+                )
+
+                out = torch.ops.pyg.hetero_neighbor_sample(*args)
+                row, col, node, edge, batch = out[:4] + (None,)
+            else:
+                out = torch.ops.torch_sparse.hetero_neighbor_sample(
+                        data.node_types,
+                        data.edge_types,
+                        colptr_dict,
+                        row_dict,
+                        target_nodes,  # seed_dict
+                        self.num_neighbors.get_mapped_values(data.edge_types),
+                        self.num_neighbors.num_hops,
+                        True, # subgraph not induced
+                        False, # do not replace
+                    )
+                node, row, col, edge, batch = out + (None,)
 
 
             # `pyg-lib>0.1.0` returns sampled number of nodes/edges:
