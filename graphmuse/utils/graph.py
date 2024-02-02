@@ -120,21 +120,24 @@ def add_measure_nodes(measures, note_array):
     assert "onset_div" in note_array.dtype.names, "Note array must have 'onset_div' field to add measure nodes."
     if not isinstance(measures, np.ndarray):
         measures = np.array([[m.start.t, m.end.t] for m in measures])
-    measure_cluster = np.zeros(len(note_array), dtype=np.int32) - 1
-    # if not hasattr(self, "beat_nodes"):
-    #     self.add_beat_nodes()
-    nodes = np.arange(len(measures))
-    # Add new attribute to hg
+
+    onset_div = note_array["onset_div"]
+    measure_cluster = np.zeros(len(note_array), dtype=np.int64) - 1
     edges = []
-    for i in range(len(measures)):
-        idx = np.where(
-            (note_array["onset_div"] >= measures[i, 0]) & (note_array["onset_div"] < measures[i, 1]))[0]
-        if idx.size:
-            measure_cluster[idx] = i
-            edges.append(np.vstack((idx, np.full(idx.size, i))))
+
+    m_ptr = 0  # pointer for measures
+    o_ptr = 0  # pointer for onset_div
+
+    while m_ptr < len(measures) and o_ptr < len(onset_div):
+        if onset_div[o_ptr] < measures[m_ptr][1]:
+            measure_cluster[o_ptr] = m_ptr
+            edges.append([o_ptr, m_ptr])
+            o_ptr += 1
+        else:
+            m_ptr += 1
+
     num_measures = len(measures)
-    measure_cluster = measure_cluster
-    measure_edges = np.hstack(edges)
+    measure_edges = np.array(edges).T
     # Warn if all edges is empty
     if measure_edges.size == 0:
         warnings.warn(
@@ -149,24 +152,32 @@ def add_beat_nodes(note_array):
     """Add virtual nodes for every beat"""
     assert "onset_beat" in note_array.dtype.names, "Note array must have 'onset_beat' field to add measure nodes."
     # when the onset_beat has negative values, we need to shift all the values to be positive
-    if note_array["onset_beat"].min() < 0:
-        note_array["onset_beat"] = note_array["onset_beat"] - note_array["onset_beat"].min()
+    onset_beat = note_array["onset_beat"]
+    # beat_edges, beat_index, beat_cluster = csamplers.compute_beat_edges(onset_beat)
+    if onset_beat.min() < 0:
+        onset_beat = onset_beat - onset_beat.min()
 
-    nodes = np.arange(int(note_array["onset_beat"].max())+1)
-    # Add new attribute to hg
-    beat_cluster = np.zeros(len(note_array), dtype=np.int32) - 1
-    edges = []
-    for b in nodes:
-        idx = np.where((note_array["onset_beat"] >= b) & (note_array["onset_beat"] < b + 1))[0]
-        if idx.size:
-            edges.append(np.vstack((idx, np.full(idx.size, b))))
-            beat_cluster[idx] = b
-    beat_index = nodes
-    beat_edges = np.hstack(edges)
-    # Warn if all edges is empty
-    if beat_edges.size == 0:
-        warnings.warn(
-            f"No edges found for beat nodes. Check that the note array has the 'onset_beat' field on score.")
+    beat_index = np.arange(int(onset_beat.max())+1)
+    beat_cluster = np.zeros(len(onset_beat), dtype=np.int64) - 1
+    # Create an empty array of edges size onset_beat x 2
+    edges = np.zeros((len(onset_beat), 2), dtype=np.int64)
+
+    b_ptr = 0  # pointer for beat_index
+    o_ptr = 0  # pointer for onset_beat
+
+    while b_ptr < len(beat_index) and o_ptr < len(onset_beat):
+        if onset_beat[o_ptr] < beat_index[b_ptr] + 1:
+            edges[o_ptr][0] = o_ptr
+            edges[o_ptr][1] = b_ptr
+            beat_cluster[o_ptr] = b_ptr
+            o_ptr += 1
+        else:
+            b_ptr += 1
+
+    beat_edges = edges.T
+
+    # Verify that every note has a beat
+    assert np.all(beat_cluster != -1), "Not all notes have a beat."
 
     return beat_cluster, beat_index, beat_edges
 

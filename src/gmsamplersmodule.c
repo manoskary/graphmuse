@@ -1892,3 +1892,97 @@ PyMODINIT_FUNC PyInit_csamplers(){
 
 	return module;
 }
+
+//#include <Python.h>
+//#include <numpy/arrayobject.h>
+
+//static PyObject* GMSamplers_compute_beat_edges(PyObject* csamplers, PyObject* args) {
+//    // Parse arguments from Python
+//    PyArrayObject* onset_beat;
+//    float min_beat_length;
+//    float max_beat_length;
+//
+//    if(!PyArg_ParseTuple(args, "O!ff", &PyArray_Type, &onset_beat, &min_beat_length, &max_beat_length)){
+//        return NULL;
+//    }
+//
+//    // Convert PyArrayObject to C array
+//    float* onset_beat_arr = (float*)PyArray_DATA(onset_beat);
+//    int len_onset_beat = PyArray_SIZE(onset_beat);
+//
+//    // Your C code starts here
+//    float min_onset_beat = onset_beat_arr[0];
+//    float max_onset_beat = onset_beat_arr[0];
+//    for (int i = 1; i < len_onset_beat; i++) {
+//        if (onset_beat_arr[i] < min_onset_beat) {
+//            min_onset_beat = onset_beat_arr[i];
+//        }
+//        if (onset_beat_arr[i] > max_onset_beat) {
+//            max_onset_beat = onset_beat_arr[i];
+//        }
+//    }
+//
+//    // ... rest of your C code ...
+//    if (min_onset_beat < 0) {
+//        for (int i = 0; i < len_onset_beat; i++) {
+//            onset_beat[i] -= min_onset_beat;
+//        }
+//        max_onset_beat -= min_onset_beat;
+//    }
+//
+//    int nodes_len = (int)max_onset_beat + 1;
+//    int* beat_cluster = (int*)calloc(len_onset_beat, sizeof(int));
+//    for (int i = 0; i < len_onset_beat; i++) {
+//        beat_cluster[i] = -1;
+//    }
+//
+//    int** edges = (int**)malloc(nodes_len * sizeof(int*));
+//    int* edges_len = (int*)calloc(nodes_len, sizeof(int));
+//
+//    int b = 0;
+//    for (int i = 0; i < len_onset_beat; i++) {
+//        // Find the correct b value for the current onset_beat value
+//        while (onset_beat[i] >= b + 1) {
+//            b++;
+//        }
+//
+//        // Reallocate memory for edges[b] if necessary
+//        edges[b] = (int*)realloc(edges[b], (edges_len[b] + 1) * sizeof(int));
+//
+//        // Add the current index to edges[b]
+//        edges[b][edges_len[b]] = i;
+//        edges_len[b]++;
+//        beat_cluster[i] = b;
+//    }
+//
+//    int* beat_index = (int*)malloc(nodes_len * sizeof(int));
+//    for (int i = 0; i < nodes_len; i++) {
+//        beat_index[i] = i;
+//    }
+//
+//    int** beat_edges = (int**)malloc(2 * sizeof(int*));
+//    beat_edges[0] = (int*)malloc(nodes_len * sizeof(int));
+//    beat_edges[1] = (int*)malloc(nodes_len * sizeof(int));
+//    for (int i = 0; i < nodes_len; i++) {
+//        beat_edges[0][i] = edges[i][0];
+//        beat_edges[1][i] = i;
+//    }
+//
+//    // Convert the result back to a PyArrayObject
+//    npy_intp dims[2] = {2, nodes_len};
+//    PyArrayObject* beat_edges = (PyArrayObject*)PyArray_SimpleNew(2, dims, NPY_INT);
+//    int** beat_edges_data = PyArray_DATA(beat_edges);
+//    memcpy(beat_edges_data, beat_edges, 2 * nodes_len * sizeof(int));
+//    // Convert beat_index to a PyArrayObject
+//    PyArrayObject* beat_index = (PyArrayObject*)PyArray_SimpleNew(1, dims, NPY_INT);
+//    int* beat_index_data = PyArray_DATA(beat_index);
+//    memcpy(beat_index_data, beat_index, nodes_len * sizeof(int));
+//    // Convert beat_cluster to a PyArrayObject
+//    PyArrayObject* beat_cluster = (PyArrayObject*)PyArray_SimpleNew(1, &len_onset_beat, NPY_INT);
+//    int* beat_cluster_data = PyArray_DATA(beat_cluster);
+//    memcpy(beat_cluster_data, beat_cluster, len_onset_beat * sizeof(int));
+//
+//
+//    // Return the result
+//    return PyTuple_Pack(3, beat_edges, beat_index, beat_cluster);
+//}
