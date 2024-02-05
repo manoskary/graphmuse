@@ -6,6 +6,7 @@ from graphmuse.samplers import random_score_region_torch, SubgraphMultiplicitySa
 from torch_geometric.sampler.utils import to_csc, to_hetero_csc, remap_keys
 from typing import Any, Callable, Iterator, List, Optional, Tuple, Union, Dict
 from torch_geometric.typing import EdgeType, NodeType, WITH_PYG_LIB
+import torch_geometric
 from torch_geometric.loader.utils import (
     filter_data,
     infer_filter_per_worker,
@@ -28,6 +29,7 @@ class MuseNeighborLoader(DataLoader):
             graphs: List[Union[Data, HeteroData, Tuple[FeatureStore, GraphStore]]],
             num_neighbors: Union[List[int], Dict[EdgeType, List[int]]],
             subgraph_size: int = 100,
+            subgraph_sample_ratio: float = 2,
             transform: Optional[Callable] = None,
             transform_sampler_output: Optional[Callable] = None,
             filter_per_worker: Optional[bool] = None,
@@ -53,13 +55,14 @@ class MuseNeighborLoader(DataLoader):
         self.share_memory = share_memory
         self.node_time: Optional[Dict[NodeType, Tensor]] = None
         self.edge_time: Optional[Dict[EdgeType, Tensor]] = None
+        self.edge_weight: Optional[Dict[EdgeType, Tensor]] = None
 
         kwargs.pop('dataset', None)
         kwargs.pop('collate_fn', None)
         self.batch_size = kwargs.pop('batch_size', 1)
         input_type = "note"
         base_sampler = SubgraphMultiplicitySampler(graphs, max_subgraph_size=subgraph_size, batch_size=self.batch_size,
-                                                   multiplicity_ratio=2)
+                                                   multiplicity_ratio=subgraph_sample_ratio)
         # Get node type (or `None` for homogeneous graphs):
 
         dataset = ConcatDataset([self.graphs])
@@ -77,6 +80,7 @@ class MuseNeighborLoader(DataLoader):
         r"""Samples a subgraph from a batch of input nodes."""
         data_list = []
         for data in data_batch:
+            data = data.contiguous()
             if data["note"].num_nodes <= self.subgraph_size:
                 data_list.append(data)
                 continue
@@ -98,9 +102,14 @@ class MuseNeighborLoader(DataLoader):
                     colptr_dict,
                     row_dict,
                     target_nodes, # seed_dict
-                    self.num_neighbors.get_mapped_values(self.edge_types),
+                    self.num_neighbors.get_mapped_values(data.edge_types),
                     self.node_time,
                 )
+                # Setting to None
+                seed_time = None
+                args += (seed_time,)
+                if torch_geometric.typing.WITH_WEIGHTED_NEIGHBOR_SAMPLE:
+                    args += (self.edge_weight,)
                 args += (
                     True,  # csc
                     False, # do not replace
