@@ -70,84 +70,86 @@ class MuseNeighborLoader(DataLoader):
 
     def __call__(
             self,
-            index: Union[Tensor, List[int]],
+            index: List[HeteroData],
     ) -> Union[Data, HeteroData]:
         r"""Samples a subgraph from a batch of input nodes."""
         out = self.collate_fn(index)
         return out
 
-    def collate_fn(self, data_batch: Union[Tensor, List[int]]) -> Union[Data, HeteroData]:
+    def collate_fn(self, data_batch: List[HeteroData]) -> Batch:
         r"""Samples a subgraph from a batch of input nodes."""
         data_list = []
         for data in data_batch:
-            data = data.contiguous()
-            if data["note"].num_nodes <= self.subgraph_size:
-                data_list.append(data)
-                continue
-            # sample nodes
-            target_nodes = random_score_region_torch(data, self.subgraph_size, node_type="note")
-            # Convert the graph data into CSC format for sampling:
-            to_rel_type = {k: '__'.join(k) for k in data.edge_types}
-            to_edge_type = {v: k for k, v in to_rel_type.items()}
-            colptr_dict, row_dict, perm = to_hetero_csc(
-                data, device='cpu', share_memory=self.share_memory,
-                is_sorted=self.is_sorted)
-
-            row_dict = remap_keys(row_dict, to_rel_type)
-            colptr_dict = remap_keys(colptr_dict, to_rel_type)
-            if WITH_PYG_LIB:
-                args = (
-                    data.node_types,
-                    data.edge_types,
-                    colptr_dict,
-                    row_dict,
-                    target_nodes, # seed_dict
-                    self.num_neighbors.get_mapped_values(data.edge_types),
-                    self.node_time,
-                )
-                # Setting to None
-                seed_time = None
-                args += (seed_time,)
-                if torch_geometric.typing.WITH_WEIGHTED_NEIGHBOR_SAMPLE:
-                    args += (self.edge_weight,)
-                args += (
-                    True,  # csc
-                    False, # do not replace
-                    True, # Subgraph not induced
-                    False, # not disjoint
-                    'uniform', # temporal strategy
-                    True,  # return_edge_id
-                )
-
-                out = torch.ops.pyg.hetero_neighbor_sample(*args)
-                row, col, node, edge, batch = out[:4] + (None,)
-            else:
-                out = torch.ops.torch_sparse.hetero_neighbor_sample(
-                        data.node_types,
-                        data.edge_types,
-                        colptr_dict,
-                        row_dict,
-                        target_nodes,  # seed_dict
-                        self.num_neighbors.get_mapped_values(data.edge_types),
-                        self.num_neighbors.num_hops,
-                        True, # subgraph not induced
-                        False, # do not replace
-                    )
-                node, row, col, edge, batch = out + (None,)
-
-
-            # `pyg-lib>0.1.0` returns sampled number of nodes/edges:
-            num_sampled_nodes = num_sampled_edges = None
-            if len(out) >= 6:
-                num_sampled_nodes, num_sampled_edges = out[4:6]
-            row = remap_keys(row, to_edge_type)
-            col = remap_keys(col, to_edge_type)
-            edge = remap_keys(edge, to_edge_type)
-            # filter data to create a new HeteroData object.
-            data_out = filter_hetero_data(data, node, row, col, edge, None)
+            data_out = self.sample_from_each_graph(data)
             data_list.append(data_out)
         batch_out = Batch.from_data_list(data_list)
         return batch_out
+
+    def sample_from_each_graph(self, data):
+        data = data.contiguous()
+        if data["note"].num_nodes <= self.subgraph_size:
+            return data
+        # sample nodes
+        target_nodes = random_score_region_torch(data, self.subgraph_size, node_type="note")
+        # Convert the graph data into CSC format for sampling:
+        to_rel_type = {k: '__'.join(k) for k in data.edge_types}
+        to_edge_type = {v: k for k, v in to_rel_type.items()}
+        colptr_dict, row_dict, perm = to_hetero_csc(
+            data, device=self.device, share_memory=self.share_memory,
+            is_sorted=self.is_sorted)
+
+        row_dict = remap_keys(row_dict, to_rel_type)
+        colptr_dict = remap_keys(colptr_dict, to_rel_type)
+        if WITH_PYG_LIB:
+            args = (
+                data.node_types,
+                data.edge_types,
+                colptr_dict,
+                row_dict,
+                target_nodes,  # seed_dict
+                self.num_neighbors.get_mapped_values(data.edge_types),
+                self.node_time,
+            )
+            # Setting to None
+            seed_time = None
+            args += (seed_time,)
+            if torch_geometric.typing.WITH_WEIGHTED_NEIGHBOR_SAMPLE:
+                args += (self.edge_weight,)
+            args += (
+                True,  # csc
+                False,  # do not replace
+                True,  # Subgraph not induced
+                False,  # not disjoint
+                'uniform',  # temporal strategy
+                True,  # return_edge_id
+            )
+
+            out = torch.ops.pyg.hetero_neighbor_sample(*args)
+            row, col, node, edge, batch = out[:4] + (None,)
+        else:
+            out = torch.ops.torch_sparse.hetero_neighbor_sample(
+                data.node_types,
+                data.edge_types,
+                colptr_dict,
+                row_dict,
+                target_nodes,  # seed_dict
+                self.num_neighbors.get_mapped_values(data.edge_types),
+                self.num_neighbors.num_hops,
+                True,  # subgraph not induced
+                False,  # do not replace
+            )
+            node, row, col, edge, batch = out + (None,)
+
+        # `pyg-lib>0.1.0` returns sampled number of nodes/edges:
+        num_sampled_nodes = num_sampled_edges = None
+        if len(out) >= 6:
+            num_sampled_nodes, num_sampled_edges = out[4:6]
+        row = remap_keys(row, to_edge_type)
+        col = remap_keys(col, to_edge_type)
+        edge = remap_keys(edge, to_edge_type)
+        # filter data to create a new HeteroData object.
+        data_out = filter_hetero_data(data, node, row, col, edge, None)
+        return data_out
 
     @property
     def num_neighbors(self) -> NumNeighbors:
