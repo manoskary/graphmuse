@@ -89,6 +89,12 @@ class MuseNeighborLoader(DataLoader):
     def sample_from_each_graph(self, data):
         data = data.contiguous()
         if data["note"].num_nodes <= self.subgraph_size:
+            target_lenghts = {k: v.shape[0] for k, v in data.x_dict.items()}
+            for k, v in target_lenghts.items():
+                data[k].num_sampled_nodes = v
+            if WITH_PYG_LIB:
+                self.set_neighbor_mask_node(data, {k: [v.shape[0]] for k, v in target_lenghts.items()})
+                self.set_neighbor_mask_edge(data, {k: [v.shape[1]] for k, v in data.edge_index_dict.items()})
             return data
         # sample nodes
         target_nodes = random_score_region_torch(data, self.subgraph_size, node_type="note")
