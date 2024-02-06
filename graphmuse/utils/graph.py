@@ -253,6 +253,7 @@ def create_score_graph(
         measure_index = torch.arange(num_measures).long()
         graph["measure", "next", "measure"].edge_index = torch.vstack((measure_index[:-1], measure_index[1:]))
         # scatter note_features to measure_features based on measure_cluster
+        graph["measure"].index = measure_index
         graph["measure"].x = torch.zeros(measure_index.shape[0], graph["note"].x.shape[1])
         graph["measure"].x.scatter_add_(0, graph["note"].measure_cluster.unsqueeze(-1).expand(-1, graph["note"].x.shape[1]), graph["note"].x)
 
@@ -263,8 +264,8 @@ def create_score_graph(
         graph["beat", "connects", "note"].edge_index = graph["note", "connects", "beat"].edge_index.flip(0)
         beat_index = torch.from_numpy(beat_index).long()
         graph["beat", "next", "beat"].edge_index = torch.vstack((beat_index[:-1], beat_index[1:]))
-
         # scatter note_features to beat_features based on beat_cluster
+        graph["beat"].index = beat_index
         graph["beat"].x = torch.zeros(beat_index.shape[0], graph["note"].x.shape[1])
         graph["beat"].x.scatter_add_(0, graph["note"].beat_cluster.unsqueeze(-1).expand(-1, graph["note"].x.shape[1]), graph["note"].x)
 

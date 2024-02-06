@@ -1,9 +1,17 @@
 from scipy import sparse as sp
 from scipy.sparse.linalg import eigs
 import torch
+from typing import Dict, Optional
 import numpy as np
 import graphmuse.samplers as sam
 from .graph import create_score_graph
+from torch_geometric.typing import (
+    # MaybeHeteroAdjTensor,
+    # MaybeHeteroEdgeTensor,
+    MaybeHeteroNodeTensor,
+    NodeType,
+    SparseTensor,
+)
 
 
 def degree(edge_index, num_nodes):
@@ -99,3 +107,78 @@ def create_random_music_graph(graph_size, min_duration, max_duration, feature_si
 
     graph = create_score_graph(features, note_array, sort=True, add_reverse=True, add_beats=add_beat_nodes)
     return graph
+
+
+def trim_to_layer(layer: int,
+                  neighbor_mask_node:
+                  torch.LongTensor,
+                  neighbor_mask_edge: torch.LongTensor,
+                  x: MaybeHeteroNodeTensor,
+                  edge_index, # :MaybeHeteroEdgeTensor
+                  edge_attr = None, # : Optional[MaybeHeteroEdgeTensor]
+                  padding_value = 0
+                  ):
+    """Trims the :obj:`edge_index` representation, node features :obj:`x` and
+    edge features :obj:`edge_attr` to a minimal-sized representation for the
+    current GNN layer :obj:`layer` in directed
+    :class:`~torch_geometric.loader.NeighborLoader` scenarios.
+
+    This ensures that no computation is performed for nodes and edges that are
+    not included in the current GNN layer, thus avoiding unnecessary
+    computation within the GNN when performing neighborhood sampling.
+
+    Args:
+        layer (int): The current GNN layer.
+        neighbor_mask_node (torch.LongTensor or Dict[NodeType, torch.LongTensor]): The
+            mask of sampled nodes per hop.
+        neighbor_mask_edge (torch.LongTensor or Dict[NodeType, torch.LongTensor]): The
+            mask of sampled edges per hop.
+        x (torch.Tensor or Dict[NodeType, torch.Tensor]): The homogeneous or
+            heterogeneous (hidden) node features.
+        edge_index (torch.Tensor or Dict[EdgeType, torch.Tensor]): The
+            homogeneous or heterogeneous edge indices.
+        edge_attr (torch.Tensor or Dict[EdgeType, torch.Tensor], optional): The
+            homogeneous or heterogeneous (hidden) edge features.
+    """
+    if layer <= 0:
+        return x, edge_index, edge_attr
+
+    if isinstance(neighbor_mask_edge, dict):
+        assert isinstance(neighbor_mask_node, dict)
+        edge_mask = {k: v[v <= layer] for k, v in neighbor_mask_edge.items()}
+        # node_mask = {k: v[v <= layer] for k, v in neighbor_mask_node.items()}
+
+        assert isinstance(x, dict)
+        for k, v in x.items():
+            x[k][neighbor_mask_node[k] == layer] = padding_value
+
+        assert isinstance(edge_index, dict)
+        edge_index = {
+            k: v[:, edge_mask[k] < layer]
+            for k, v in edge_index.items()
+        }
+
+        if edge_attr is not None:
+            assert isinstance(edge_attr, dict)
+            edge_attr = {
+                k: v[edge_mask[k] < layer]
+                for k, v in edge_attr.items()
+            }
+
+        return x, edge_index, edge_attr
+
+    assert isinstance(neighbor_mask_node, torch.LongTensor)
+    neighbor_mask_edge = neighbor_mask_edge[neighbor_mask_edge <= layer]
+    neighbor_mask_node = neighbor_mask_node[neighbor_mask_node <= layer]
+
+    assert isinstance(x, torch.Tensor)
+    x = x[neighbor_mask_node < layer]
+
+    assert isinstance(edge_index, (torch.Tensor, SparseTensor))
+    edge_index = edge_index[:, neighbor_mask_edge < layer]
+
+    if edge_attr is not None:
+        assert isinstance(edge_attr, torch.Tensor)
+        edge_attr = edge_attr[neighbor_mask_edge < layer]
+
+    return x, edge_index, edge_attr

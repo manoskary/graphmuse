@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch.utils.data import DataLoader, ConcatDataset
 from torch import Tensor
@@ -91,6 +92,7 @@ class MuseNeighborLoader(DataLoader):
             return data
         # sample nodes
         target_nodes = random_score_region_torch(data, self.subgraph_size, node_type="note")
+        target_lenghts = {k: v.shape[0] for k, v in target_nodes.items()}
         # Convert the graph data into CSC format for sampling:
         to_rel_type = {k: '__'.join(k) for k in data.edge_types}
         to_edge_type = {v: k for k, v in to_rel_type.items()}
@@ -149,6 +151,17 @@ class MuseNeighborLoader(DataLoader):
         edge = remap_keys(edge, to_edge_type)
         # filter data to create a new HeteroData object.
         data_out = filter_hetero_data(data, node, row, col, edge, None)
+
+        for k, v in target_lenghts.items():
+            data_out[k].num_sampled_nodes = v
+
+        if num_sampled_nodes is not None:
+            self.set_neighbor_mask_node(data_out, num_sampled_nodes)
+        if num_sampled_edges is not None:
+            self.set_neighbor_mask_edge(data_out, num_sampled_edges)
+        # data.set_value_dict('batch', data_out.batch)
+        # data.set_value_dict('num_sampled_nodes', data_out.num_sampled_nodes)
+        # data.set_value_dict('num_sampled_edges', data_out.num_sampled_edges)
         return data_out
 
     @property
@@ -161,6 +174,25 @@ class MuseNeighborLoader(DataLoader):
             self._num_neighbors = num_neighbors
         else:
             self._num_neighbors = NumNeighbors(num_neighbors)
+
+    def set_neighbor_mask_node(self, data, num_sampled_nodes):
+        for key, value in num_sampled_nodes.items():
+            neighbor_mask = torch.zeros(data[key].x.shape[0], dtype=torch.long)
+            value = np.cumsum(value)
+            assert value[-1] == data[key].x.shape[0]
+            for i in range(1, len(value)):
+                neighbor_mask[value[i - 1]:value[i]] = i
+            data[key].neighbor_mask = neighbor_mask
+
+    def set_neighbor_mask_edge(self, data, num_sampled_edges):
+        for key, value in num_sampled_edges.items():
+            key = tuple(key.split("__"))
+            neighbor_mask = torch.zeros(data[key].edge_index.shape[1], dtype=torch.long)
+            value = np.cumsum(value)
+            assert value[-1] == data[key].edge_index.shape[1]
+            for i in range(1, len(value)):
+                neighbor_mask[value[i - 1]:value[i]] = i
+            data[key].neighbor_mask = neighbor_mask
 
     def __enter__(self):
         return self

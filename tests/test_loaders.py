@@ -70,11 +70,17 @@ class TestMuseNeighborLoader(TestCase):
 
         # input to a model
         # model = to_hetero(GNN(feature_size, 20, 2), batch.metadata())
-        model = MetricalGNN(feature_size, 64, 2, metadata)
+
+        model = MetricalGNN(feature_size, 64, labels, 3, metadata)
         loss = nn.CrossEntropyLoss()
         # out = model(batch.x_dict, batch.edge_index_dict)
-        target_outputs = model(batch.x_dict, batch.edge_index_dict, batch["note"].batch, batch["beat"].batch, subgraph_size)
-        target_labels = torch.cat([data["note"].y[:subgraph_size] for data in batch.to_data_list()], dim=0)
+        neighbor_mask_node = {k: batch[k].neighbor_mask for k in batch.node_types}
+        neighbor_mask_edge = {k: batch[k].neighbor_mask for k in batch.edge_types}
+        target_outputs = model(batch.x_dict, batch.edge_index_dict, batch["beat"].batch,
+                               neighbor_mask_node, neighbor_mask_edge)
+        batch["note"].x = target_outputs
+        target_outputs = torch.cat([data["note"].x[:data["note"].num_sampled_nodes] for data in batch.to_data_list()], dim=0)
+        target_labels = torch.cat([data["note"].y[:data["note"].num_sampled_nodes] for data in batch.to_data_list()], dim=0)
         loss = loss(target_outputs, target_labels)
         print("The loss is: ", loss.item())
         # check that the batch size is correct
@@ -88,4 +94,4 @@ class TestMuseNeighborLoader(TestCase):
         # check that the number of edge types is correct
         self.assertEqual(len(batch.edge_types), 10, "The number of edge types is incorrect")
         # check that the output shape is correct for the target node type
-        self.assertEqual(target_outputs.shape, (batch_size*subgraph_size, 64), "The output shape is incorrect")
+        self.assertEqual(target_outputs.shape, (batch_size*subgraph_size, labels), "The output shape is incorrect")
