@@ -93,7 +93,7 @@ class MuseNeighborLoader(DataLoader):
             for k, v in target_lenghts.items():
                 data[k].num_sampled_nodes = v
             if WITH_PYG_LIB:
-                self.set_neighbor_mask_node(data, {k: [v.shape[0]] for k, v in target_lenghts.items()})
+                self.set_neighbor_mask_node(data, {k: [v.shape[0]] for k, v in data.x_dict.items()})
                 self.set_neighbor_mask_edge(data, {k: [v.shape[1]] for k, v in data.edge_index_dict.items()})
             return data
         # sample nodes
@@ -192,7 +192,7 @@ class MuseNeighborLoader(DataLoader):
 
     def set_neighbor_mask_edge(self, data, num_sampled_edges):
         for key, value in num_sampled_edges.items():
-            key = tuple(key.split("__"))
+            key = tuple(key.split("__")) if isinstance(key, str) else key
             neighbor_mask = torch.zeros(data[key].edge_index.shape[1], dtype=torch.long)
             value = np.cumsum(value)
             assert value[-1] == data[key].edge_index.shape[1]
