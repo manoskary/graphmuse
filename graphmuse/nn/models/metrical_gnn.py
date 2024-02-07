@@ -51,9 +51,9 @@ class MetricalGNN(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers, metadata, dropout=0.5):
         super(MetricalGNN, self).__init__()
         self.gnn = HierarchicalHeteroGraphSage(metadata[1], hidden_dim, num_layers)
-        encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=8)
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=3, norm=nn.LayerNorm(hidden_dim),
-                                                         enable_nested_tensor=False)
+        # encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=8)
+        # self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=3, norm=nn.LayerNorm(hidden_dim),
+        #                                                  enable_nested_tensor=False)
         # self.gru_model = nn.Sequential(
         #     GRUWrapper(input_size=output_dim, hidden_size=output_dim, num_layers=1, batch_first=True),
         #     nn.ReLU(),
