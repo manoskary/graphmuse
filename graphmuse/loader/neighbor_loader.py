@@ -81,17 +81,18 @@ class MuseNeighborLoader(DataLoader):
         r"""Samples a subgraph from a batch of input nodes."""
         data_list = []
         for data in data_batch:
+            data = data.contiguous()
             data_out = self.sample_from_each_graph(data)
             data_list.append(data_out)
         batch_out = Batch.from_data_list(data_list)
         return batch_out
 
     def sample_from_each_graph(self, data):
-        data = data.contiguous()
+        # If the graph is already smaller than the subgraph size, return the whole graph
         if data["note"].num_nodes <= self.subgraph_size:
-            target_lenghts = {k: v.shape[0] for k, v in data.x_dict.items()}
-            for k, v in target_lenghts.items():
-                data[k].num_sampled_nodes = v
+            # target_lenghts = {k: data[k].x.shape[0] for k in data.node_types}
+            # for k, v in target_lenghts.items():
+            #     data[k].num_sampled_nodes = v
             if WITH_PYG_LIB:
                 self.set_neighbor_mask_node(data, {k: [v.shape[0]] for k, v in data.x_dict.items()})
                 self.set_neighbor_mask_edge(data, {k: [v.shape[1]] for k, v in data.edge_index_dict.items()})
@@ -158,8 +159,8 @@ class MuseNeighborLoader(DataLoader):
         # filter data to create a new HeteroData object.
         data_out = filter_hetero_data(data, node, row, col, edge, None)
 
-        for k, v in target_lenghts.items():
-            data_out[k].num_sampled_nodes = v
+        # for k, v in target_lenghts.items():
+        #     data_out[k].num_sampled_nodes = v
 
         if num_sampled_nodes is not None:
             self.set_neighbor_mask_node(data_out, num_sampled_nodes)

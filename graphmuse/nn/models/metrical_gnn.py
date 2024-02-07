@@ -1,22 +1,29 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import SAGEConv, HeteroConv
+from torch_geometric.nn import SAGEConv, HeteroConv, GATConv
 from graphmuse.utils.graph_utils import trim_to_layer
 
 
 # Create a GNN Encoder
 class HierarchicalHeteroGraphSage(torch.nn.Module):
-    def __init__(self, edge_types, hidden_channels, num_layers):
+    def __init__(self, edge_types, input_channels, hidden_channels, num_layers):
         super().__init__()
         self.num_layers = num_layers
         self.convs = torch.nn.ModuleList()
-        for _ in range(num_layers):
+        self.convs.append(
+            HeteroConv(
+                {
+                    edge_type: SAGEConv(input_channels, hidden_channels)
+                    for edge_type in edge_types
+                }, aggr='mean')
+        )
+        for _ in range(num_layers-1):
             conv = HeteroConv(
                 {
-                    edge_type: SAGEConv((-1, -1), hidden_channels)
+                    edge_type: SAGEConv(hidden_channels, hidden_channels)
                     for edge_type in edge_types
-                }, aggr='sum')
+                }, aggr='mean')
             self.convs.append(conv)
 
     def forward(self, x_dict, edge_index_dict, neighbor_mask_node,
@@ -50,7 +57,7 @@ class GRUWrapper(nn.Module):
 class MetricalGNN(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers, metadata, dropout=0.5):
         super(MetricalGNN, self).__init__()
-        self.gnn = HierarchicalHeteroGraphSage(metadata[1], hidden_dim, num_layers)
+        self.gnn = HierarchicalHeteroGraphSage(metadata[1], input_dim, hidden_dim, num_layers)
         # encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=8)
         # self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=3, norm=nn.LayerNorm(hidden_dim),
         #                                                  enable_nested_tensor=False)
