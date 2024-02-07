@@ -69,7 +69,7 @@ class MetricalGNN(nn.Module):
             nn.Linear(hidden_dim, output_dim)
         )
 
-    def forward(self, x_dict, edge_index_dict, batch_beat, neighbor_mask_node, neighbor_mask_edge):
+    def forward(self, x_dict, edge_index_dict, neighbor_mask_node, neighbor_mask_edge, num_sampled_beats):
         x_dict = self.gnn(x_dict, edge_index_dict, neighbor_mask_node, neighbor_mask_edge)
         note = x_dict["note"]
         # Return the output
