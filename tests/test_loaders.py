@@ -10,10 +10,10 @@ from graphmuse.nn.models.metrical_gnn import MetricalGNN
 
 
 # Standardize the random seed
-np.random.seed(42)
-torch.manual_seed(42)
-torch.cuda.manual_seed(42)
-c_set_seed(42)
+np.random.seed(1)
+torch.manual_seed(1)
+torch.cuda.manual_seed(1)
+c_set_seed(1)
 torch.backends.cudnn.deterministic = True
 
 
@@ -56,7 +56,7 @@ class TestMuseNeighborLoader(TestCase):
             l = np.random.randint(min_nodes, max_nodes)
             graph = create_random_music_graph(
                 graph_size=l, min_duration=min_dur, max_duration=max_dur, feature_size=feature_size, add_beat_nodes=True)
-            label = np.random.randint(0, labels, l)
+            label = np.random.randint(0, labels, graph["note"].x.shape[0])
             graph["note"].y = torch.tensor(label, dtype=torch.long)
             graphs.append(graph)
 
@@ -76,11 +76,12 @@ class TestMuseNeighborLoader(TestCase):
         # out = model(batch.x_dict, batch.edge_index_dict)
         neighbor_mask_node = {k: batch[k].neighbor_mask for k in batch.node_types}
         neighbor_mask_edge = {k: batch[k].neighbor_mask for k in batch.edge_types}
+
         target_outputs = model(batch.x_dict, batch.edge_index_dict, batch["beat"].batch,
                                neighbor_mask_node, neighbor_mask_edge)
-        batch["note"].x = target_outputs
-        target_outputs = torch.cat([data["note"].x[:data["note"].num_sampled_nodes] for data in batch.to_data_list()], dim=0)
-        target_labels = torch.cat([data["note"].y[:data["note"].num_sampled_nodes] for data in batch.to_data_list()], dim=0)
+
+        # Trim the labels to the target nodes (i.e. layer 0)
+        target_labels = batch["note"].y[neighbor_mask_node["note"] == 0]
         loss = loss(target_outputs, target_labels)
         print("The loss is: ", loss.item())
         # check that the batch size is correct

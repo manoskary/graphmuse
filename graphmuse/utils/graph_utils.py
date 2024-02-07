@@ -116,7 +116,6 @@ def trim_to_layer(layer: int,
                   x: MaybeHeteroNodeTensor,
                   edge_index, # :MaybeHeteroEdgeTensor
                   edge_attr = None, # : Optional[MaybeHeteroEdgeTensor]
-                  padding_value = 0
                   ):
     """Trims the :obj:`edge_index` representation, node features :obj:`x` and
     edge features :obj:`edge_attr` to a minimal-sized representation for the
@@ -146,17 +145,25 @@ def trim_to_layer(layer: int,
     if isinstance(neighbor_mask_edge, dict):
         assert isinstance(neighbor_mask_node, dict)
         edge_mask = {k: v[v <= layer] for k, v in neighbor_mask_edge.items()}
-        # node_mask = {k: v[v <= layer] for k, v in neighbor_mask_node.items()}
+        node_mask = {k: v[v <= layer] for k, v in neighbor_mask_node.items()}
+        node_reindex = {k: torch.zeros_like(v) for k, v in node_mask.items()}
+        for k, v in node_reindex.items():
+            mask = node_mask[k] < layer
+            node_reindex[k][mask] = torch.arange(mask.sum(), device=v.device)
 
         assert isinstance(x, dict)
-        for k, v in x.items():
-            x[k][neighbor_mask_node[k] == layer] = padding_value
+        x = {k: v[node_mask[k] < layer] for k, v in x.items()}
 
         assert isinstance(edge_index, dict)
         edge_index = {
             k: v[:, edge_mask[k] < layer]
             for k, v in edge_index.items()
         }
+
+        for k, v in edge_index.items():
+            src_ntype = k[0]
+            dst_ntype = k[-1]
+            edge_index[k] = torch.stack([node_reindex[src_ntype][v[0]], node_reindex[dst_ntype][v[1]]], dim=0)
 
         if edge_attr is not None:
             assert isinstance(edge_attr, dict)
@@ -170,12 +177,16 @@ def trim_to_layer(layer: int,
     assert isinstance(neighbor_mask_node, torch.LongTensor)
     neighbor_mask_edge = neighbor_mask_edge[neighbor_mask_edge <= layer]
     neighbor_mask_node = neighbor_mask_node[neighbor_mask_node <= layer]
+    node_reindex = torch.empty_like(neighbor_mask_node)
+    mask = neighbor_mask_node < layer
+    node_reindex[mask] = torch.arange(mask.sum(), device=node_reindex.device)
 
     assert isinstance(x, torch.Tensor)
     x = x[neighbor_mask_node < layer]
 
     assert isinstance(edge_index, (torch.Tensor, SparseTensor))
     edge_index = edge_index[:, neighbor_mask_edge < layer]
+    edge_index = torch.stack([node_reindex[edge_index[0]], node_reindex[edge_index[1]]], dim=0)
 
     if edge_attr is not None:
         assert isinstance(edge_attr, torch.Tensor)

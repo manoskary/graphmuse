@@ -29,7 +29,6 @@ class HierarchicalHeteroGraphSage(torch.nn.Module):
                 neighbor_mask_edge=neighbor_mask_edge,
                 x=x_dict,
                 edge_index=edge_index_dict,
-                padding_value=0.0
             )
 
             x_dict = conv(x_dict, edge_index_dict)
@@ -73,24 +72,7 @@ class MetricalGNN(nn.Module):
     def forward(self, x_dict, edge_index_dict, batch_beat, neighbor_mask_node, neighbor_mask_edge):
         x_dict = self.gnn(x_dict, edge_index_dict, neighbor_mask_node, neighbor_mask_edge)
         note = x_dict["note"]
-        h_beat = x_dict["beat"]
-        splits = [0] + torch.where(batch_beat[1:] != batch_beat[:-1])[0].tolist() + [len(batch_beat)]
-        # take diff of splits to get the length of each beat sequence with next element
-        splits = [s - e for s, e in zip(splits[1:], splits[:-1])]
-        h_beat = torch.split(h_beat, splits)
-        # pad the beat sequences
-        h = nn.utils.rnn.pad_sequence(h_beat, batch_first=True)
-        # Pass the beat sequences through the transformer or gru layer
-        h = self.transformer_encoder(h)
-        # h = self.gru_model(h)
-        # Unpad the beat sequences
-        h = nn.utils.rnn.unpad_sequence(h, lengths=torch.as_tensor(splits), batch_first=True)
-        h = torch.cat(h)
-        new_note = torch.empty_like(note)
-        edge_bcn = edge_index_dict.pop(("beat", "connects", "note"))
-        new_note[edge_bcn[1]] = h[edge_bcn[0]]
-        new_note = note + new_note
         # Return the output
-        out = self.mlp(new_note)
+        out = self.mlp(note)
         return out
 
