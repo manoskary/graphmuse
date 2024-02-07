@@ -183,7 +183,7 @@ class MuseNeighborLoader(DataLoader):
 
     def set_neighbor_mask_node(self, data, num_sampled_nodes):
         for key, value in num_sampled_nodes.items():
-            neighbor_mask = torch.zeros(data[key].x.shape[0], dtype=torch.long)
+            neighbor_mask = torch.zeros(data[key].x.shape[0], dtype=torch.long, device=data[key].x.device)
             value = np.cumsum(value)
             assert value[-1] == data[key].x.shape[0]
             for i in range(1, len(value)):
@@ -193,7 +193,7 @@ class MuseNeighborLoader(DataLoader):
     def set_neighbor_mask_edge(self, data, num_sampled_edges):
         for key, value in num_sampled_edges.items():
             key = tuple(key.split("__")) if isinstance(key, str) else key
-            neighbor_mask = torch.zeros(data[key].edge_index.shape[1], dtype=torch.long)
+            neighbor_mask = torch.zeros(data[key].edge_index.shape[1], dtype=torch.long, device=data[key].edge_index.device)
             value = np.cumsum(value)
             assert value[-1] == data[key].edge_index.shape[1]
             for i in range(1, len(value)):

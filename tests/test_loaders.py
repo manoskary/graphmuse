@@ -78,7 +78,7 @@ class TestMuseNeighborLoader(TestCase):
         neighbor_mask_edge = {k: batch[k].neighbor_mask for k in batch.edge_types}
 
         target_outputs = model(batch.x_dict, batch.edge_index_dict,
-                               neighbor_mask_node, neighbor_mask_edge, batch["beat"].num_sampled_nodes)
+                               neighbor_mask_node, neighbor_mask_edge)
 
         # Trim the labels to the target nodes (i.e. layer 0)
         target_labels = batch["note"].y[neighbor_mask_node["note"] == 0]
