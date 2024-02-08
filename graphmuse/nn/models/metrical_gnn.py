@@ -7,10 +7,12 @@ from graphmuse.utils.graph_utils import trim_to_layer
 
 # Create a GNN Encoder
 class HierarchicalHeteroGraphSage(torch.nn.Module):
-    def __init__(self, edge_types, input_channels, hidden_channels, num_layers):
+    def __init__(self, edge_types, input_channels, hidden_channels, num_layers, dropout=0.5):
         super().__init__()
         self.num_layers = num_layers
         self.convs = torch.nn.ModuleList()
+        self.layer_norms = torch.nn.ModuleList()
+        self.dropout = nn.Dropout(dropout)
         self.convs.append(
             HeteroConv(
                 {
@@ -25,11 +27,12 @@ class HierarchicalHeteroGraphSage(torch.nn.Module):
                     for edge_type in edge_types
                 }, aggr='mean')
             self.convs.append(conv)
+            self.layer_norms.append(nn.LayerNorm(hidden_channels))
 
     def forward(self, x_dict, edge_index_dict, neighbor_mask_node,
                 neighbor_mask_edge):
 
-        for i, conv in enumerate(self.convs):
+        for i, conv in enumerate(self.convs[:-1]):
             x_dict, edge_index_dict, _ = trim_to_layer(
                 layer=self.num_layers - i,
                 neighbor_mask_node=neighbor_mask_node,
@@ -40,6 +43,17 @@ class HierarchicalHeteroGraphSage(torch.nn.Module):
 
             x_dict = conv(x_dict, edge_index_dict)
             x_dict = {key: x.relu() for key, x in x_dict.items()}
+            x_dict = {key: self.layer_norms[i](x) for key, x in x_dict.items()}
+            x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
+
+        # Last layer
+        x_dict, edge_index_dict, _ = trim_to_layer(
+            layer=1,
+            neighbor_mask_node=neighbor_mask_node,
+            neighbor_mask_edge=neighbor_mask_edge,
+            x=x_dict,
+            edge_index=edge_index_dict,
+        )
 
         return x_dict
 
@@ -71,7 +85,7 @@ class MetricalGNN(nn.Module):
         self.mlp = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
-            nn.LayerNorm(hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, output_dim)
         )
