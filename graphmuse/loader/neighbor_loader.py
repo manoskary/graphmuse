@@ -45,7 +45,7 @@ class MuseNeighborLoader(DataLoader):
 
         self.graphs = graphs
         self.metadata = graphs[0].metadata()
-        self.num_neighbors = num_neighbors
+        self.num_neighbors = num_neighbors if num_neighbors is not None else {k: [0] for k in self.metadata[1]}
         self.subgraph_size = subgraph_size
         self.transform = transform
         self.transform_sampler_output = transform_sampler_output
@@ -57,6 +57,8 @@ class MuseNeighborLoader(DataLoader):
         self.node_time: Optional[Dict[NodeType, Tensor]] = None
         self.edge_time: Optional[Dict[EdgeType, Tensor]] = None
         self.edge_weight: Optional[Dict[EdgeType, Tensor]] = None
+        # Fetch neighbors is set to False when the num neighbors is None
+        self.fetch_neighbors = num_neighbors is not None
 
         kwargs.pop('dataset', None)
         kwargs.pop('collate_fn', None)
@@ -93,7 +95,7 @@ class MuseNeighborLoader(DataLoader):
             # target_lenghts = {k: data[k].x.shape[0] for k in data.node_types}
             # for k, v in target_lenghts.items():
             #     data[k].num_sampled_nodes = v
-            if WITH_PYG_LIB:
+            if WITH_PYG_LIB and self.fetch_neighbors:
                 self.set_neighbor_mask_node(data, {k: [v.shape[0]] for k, v in data.x_dict.items()})
                 self.set_neighbor_mask_edge(data, {k: [v.shape[1]] for k, v in data.edge_index_dict.items()})
             return data
@@ -109,6 +111,26 @@ class MuseNeighborLoader(DataLoader):
 
         row_dict = remap_keys(row_dict, to_rel_type)
         colptr_dict = remap_keys(colptr_dict, to_rel_type)
+
+
+        node, row, col, edge, batch, num_sampled_nodes, num_sampled_edges = self.sample_hetero_graph(
+            data, target_nodes, colptr_dict, row_dict, to_edge_type)
+
+        # filter data to create a new HeteroData object.
+        data_out = filter_hetero_data(data, node, row, col, edge, None)
+
+
+        if WITH_PYG_LIB and self.fetch_neighbors:
+            self.set_neighbor_mask_node(data_out, num_sampled_nodes)
+            self.set_neighbor_mask_edge(data_out, num_sampled_edges)
+
+        # for k, v in target_lenghts.items():
+        #     data_out[k].num_sampled_nodes = v
+
+        return data_out
+
+    def sample_hetero_graph(self, data, target_nodes, colptr_dict, row_dict, to_edge_type):
+        # Sample subgraph:
         if WITH_PYG_LIB:
             args = (
                 data.node_types,
@@ -156,20 +178,8 @@ class MuseNeighborLoader(DataLoader):
         row = remap_keys(row, to_edge_type)
         col = remap_keys(col, to_edge_type)
         edge = remap_keys(edge, to_edge_type)
-        # filter data to create a new HeteroData object.
-        data_out = filter_hetero_data(data, node, row, col, edge, None)
+        return node, row, col, edge, batch, num_sampled_nodes, num_sampled_edges
 
-        # for k, v in target_lenghts.items():
-        #     data_out[k].num_sampled_nodes = v
-
-        if num_sampled_nodes is not None:
-            self.set_neighbor_mask_node(data_out, num_sampled_nodes)
-        if num_sampled_edges is not None:
-            self.set_neighbor_mask_edge(data_out, num_sampled_edges)
-        # data.set_value_dict('batch', data_out.batch)
-        # data.set_value_dict('num_sampled_nodes', data_out.num_sampled_nodes)
-        # data.set_value_dict('num_sampled_edges', data_out.num_sampled_edges)
-        return data_out
 
     @property
     def num_neighbors(self) -> NumNeighbors:
