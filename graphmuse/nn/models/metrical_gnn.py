@@ -16,7 +16,7 @@ class HierarchicalHeteroGraphSage(torch.nn.Module):
         self.convs.append(
             HeteroConv(
                 {
-                    edge_type: SAGEConv(input_channels, hidden_channels)
+                    edge_type: SAGEConv(input_channels, hidden_channels, normalize=True, project=True)
                     for edge_type in edge_types
                 }, aggr='mean')
         )
