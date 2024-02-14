@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import SAGEConv, HeteroConv, GATConv
+from torch_geometric.nn import SAGEConv, HeteroConv, GATConv, MessagePassing
 from graphmuse.utils.graph_utils import trim_to_layer
+from graphmuse.nn.conv.gat import CustomGATConv
 
 
 # Create a GNN Encoder
@@ -24,6 +25,58 @@ class HierarchicalHeteroGraphSage(torch.nn.Module):
             conv = HeteroConv(
                 {
                     edge_type: SAGEConv(hidden_channels, hidden_channels)
+                    for edge_type in edge_types
+                }, aggr='mean')
+            self.convs.append(conv)
+            self.layer_norms.append(nn.LayerNorm(hidden_channels))
+
+    def forward(self, x_dict, edge_index_dict, neighbor_mask_node,
+                neighbor_mask_edge):
+
+        for i, conv in enumerate(self.convs[:-1]):
+            x_dict, edge_index_dict, _ = trim_to_layer(
+                layer=self.num_layers - i,
+                neighbor_mask_node=neighbor_mask_node,
+                neighbor_mask_edge=neighbor_mask_edge,
+                x=x_dict,
+                edge_index=edge_index_dict,
+            )
+
+            x_dict = conv(x_dict, edge_index_dict)
+            x_dict = {key: x.relu() for key, x in x_dict.items()}
+            x_dict = {key: self.layer_norms[i](x) for key, x in x_dict.items()}
+            x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
+
+        # Last layer
+        x_dict, edge_index_dict, _ = trim_to_layer(
+            layer=1,
+            neighbor_mask_node=neighbor_mask_node,
+            neighbor_mask_edge=neighbor_mask_edge,
+            x=x_dict,
+            edge_index=edge_index_dict,
+        )
+
+        return x_dict
+
+
+class HierarchicalHeteroGraphConv(torch.nn.Module):
+    def __init__(self, edge_types, input_channels, hidden_channels, num_layers, dropout=0.5):
+        super().__init__()
+        self.num_layers = num_layers
+        self.convs = torch.nn.ModuleList()
+        self.layer_norms = torch.nn.ModuleList()
+        self.dropout = nn.Dropout(dropout)
+        self.convs.append(
+            HeteroConv(
+                {
+                    edge_type: CustomGATConv(input_channels, hidden_channels, heads=4, add_self_loops=False)
+                    for edge_type in edge_types
+                }, aggr='mean')
+        )
+        for _ in range(num_layers-1):
+            conv = HeteroConv(
+                {
+                    edge_type: CustomGATConv(hidden_channels, hidden_channels, heads=4, add_self_loops=False)
                     for edge_type in edge_types
                 }, aggr='mean')
             self.convs.append(conv)
