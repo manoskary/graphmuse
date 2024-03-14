@@ -1,4 +1,4 @@
-from graphmuse.loader import MuseNeighborLoader
+from graphmuse.loader import MuseNeighborLoader, transform_to_pyg
 import numpy as np
 from graphmuse.samplers import c_set_seed
 from graphmuse.utils import create_random_music_graph
@@ -71,6 +71,7 @@ class TestMuseNeighborLoader(TestCase):
         # input to a model
         # model = to_hetero(GNN(feature_size, 20, 2), batch.metadata())
 
+
         model = MetricalGNN(feature_size, 64, labels, 3, metadata)
         loss = nn.CrossEntropyLoss()
         # out = model(batch.x_dict, batch.edge_index_dict)
@@ -96,3 +97,8 @@ class TestMuseNeighborLoader(TestCase):
         self.assertEqual(len(batch.edge_types), 10, "The number of edge types is incorrect")
         # check that the output shape is correct for the target node type
         self.assertEqual(target_outputs.shape, (batch_size*subgraph_size, labels), "The output shape is incorrect")
+        # check that transformation is correct
+        x_before_transform = batch["note"].x[batch["note"].neighbor_mask == 0]
+        batch_transform = transform_to_pyg(batch, dataloader.num_neighbors.num_hops)
+        x_after_transform = batch_transform["note"].x[:batch_transform["note"].batch_size]
+        self.assertTrue(torch.allclose(x_before_transform, x_after_transform), "The x values are not equal after transformation")

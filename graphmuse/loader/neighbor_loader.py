@@ -87,6 +87,8 @@ class MuseNeighborLoader(DataLoader):
             data_out = self.sample_from_each_graph(data)
             data_list.append(data_out)
         batch_out = Batch.from_data_list(data_list)
+        if self.transform is not None:
+            batch_out = self.transform(batch_out, self.num_neighbors.num_hops)
         return batch_out
 
     def sample_from_each_graph(self, data):
