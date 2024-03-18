@@ -5,6 +5,7 @@ from graphmuse.utils import create_random_music_graph
 import torch
 from unittest import TestCase
 import torch.nn as nn
+import time
 from torch_geometric.nn import SAGEConv, to_hetero
 from graphmuse.nn.models.metrical_gnn import MetricalGNN
 
@@ -63,7 +64,7 @@ class TestMuseNeighborLoader(TestCase):
         metadata = graph.metadata()
         # create dataloader
         dataloader = MuseNeighborLoader(graphs, subgraph_size=subgraph_size, batch_size=batch_size,
-                                        num_neighbors=[3, 3])
+                                        num_neighbors=[3, 3, 3])
 
 
         batch = next(iter(dataloader))
@@ -77,10 +78,10 @@ class TestMuseNeighborLoader(TestCase):
         # out = model(batch.x_dict, batch.edge_index_dict)
         neighbor_mask_node = {k: batch[k].neighbor_mask for k in batch.node_types}
         neighbor_mask_edge = {k: batch[k].neighbor_mask for k in batch.edge_types}
-
+        start = time.time()
         target_outputs = model(batch.x_dict, batch.edge_index_dict,
                                neighbor_mask_node, neighbor_mask_edge)
-
+        mask_model_time = time.time() - start
         # Trim the labels to the target nodes (i.e. layer 0)
         target_labels = batch["note"].y[neighbor_mask_node["note"] == 0]
         loss = loss(target_outputs, target_labels)
@@ -101,4 +102,15 @@ class TestMuseNeighborLoader(TestCase):
         x_before_transform = batch["note"].x[batch["note"].neighbor_mask == 0]
         batch_transform = transform_to_pyg(batch, dataloader.num_neighbors.num_hops)
         x_after_transform = batch_transform["note"].x[:batch_transform["note"].batch_size]
-        self.assertTrue(torch.allclose(x_before_transform, x_after_transform), "The x values are not equal after transformation")
+        self.assertTrue(torch.allclose(x_before_transform, x_after_transform),
+                        "The x values are not equal after transformation")
+        fast_model = MetricalGNN(feature_size, 64, labels, 3, metadata, fast=True)
+        start = time.time()
+        x_after_transform = fast_model(batch_transform.x_dict, batch_transform.edge_index_dict,
+                   batch_transform.num_sampled_nodes_dict, batch_transform.num_sampled_edges_dict)
+        x_after_transform = x_after_transform[:batch_transform["note"].batch_size]
+        fast_model_time = time.time() - start
+
+        self.assertEqual(x_after_transform.shape, (batch_size*subgraph_size, labels), "The output shape is incorrect")
+        print("The time for the mask model is: ", mask_model_time)
+        print("The time for the fast model is: ", fast_model_time)

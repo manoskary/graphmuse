@@ -6,10 +6,16 @@ def transform_to_pyg(data: Batch, num_hops: int) -> Batch:
     r"""Transforms the data in the batch to the PYG Hierarchical sampling format."""
     remap = {k: torch.cat([torch.where(data[k].neighbor_mask == i)[0] for i in range(num_hops + 1)],
                           dim=0) for k in data.node_types}
+    edge_remap = dict()
     for k in data.node_types:
         data[k].x = data[k].x[remap[k]]
         shape_ckecker = data[k].x.shape[0]
         data[k].num_sampled_nodes = torch.bincount(data[k].neighbor_mask)
+        start = 0
+        edge_remap[k] = torch.empty(data[k].num_sampled_nodes.sum(), dtype=torch.long)
+        for i, v in enumerate(data[k].num_sampled_nodes):
+            edge_remap[k][data[k].neighbor_mask == i] = torch.arange(start, start + v)
+            start += v
         data[k].batch_size = data[k].num_sampled_nodes[0]
         data[k].pop("neighbor_mask")
         for attribute in data[k].keys():
@@ -24,8 +30,8 @@ def transform_to_pyg(data: Batch, num_hops: int) -> Batch:
         dst_type = k[-1]
         # first remap the edge index and then reorder it
         edge_index = data[k].edge_index
-        edge_index[0] = remap[src_type][edge_index[0]]
-        edge_index[1] = remap[dst_type][edge_index[1]]
+        edge_index[0] = edge_remap[src_type][edge_index[0]]
+        edge_index[1] = edge_remap[dst_type][edge_index[1]]
         data[k].edge_index = edge_index
         # Now we can reorder the edge index and the edge attributes
         data[k].edge_index = edge_index[:, torch.cat(
