@@ -1,15 +1,39 @@
-# cython: language_level=3
 import setuptools
-import os
+import os, sys
 import numpy
-from Cython.Build import cythonize
-from distutils.core import setup, Extension
+
 
 dirname = os.path.dirname(__file__)
-graph = [os.path.join(dirname, "graphmuse", "utils", x) for x in ["cython_graph.pyx", "cython_utils.pyx", "cython_sampler.pyx"]]
-# module = setuptools.Extension('graph', sources=[graph])
-# module = cythonize(graph)
-module = [Extension("samplers", [os.path.join(dirname, "graphmuse", "samplers", "gmsamplersmodule.c")])]
+
+if os.name=='posix':
+    print("Compiling for POSIX systems. . .")
+    eca = ["-std=c11"]
+    eca.append("-DPOSIX")
+
+    # from psutil import cpu_count
+    #
+    # thread_count = cpu_count(logical=False)
+    # if thread_count > 1:
+    #     eca.append(f"-DThread_Count_Arg={thread_count}")
+
+
+elif sys.platform.startswith('win'):
+    print("Compiling for Windows. . .")
+    eca = ["/std:c11"]
+    eca.append("-DWindows")
+
+else:
+    raise Exception("Unsupported OS, please use Linux or Windows.")
+
+# add flag to turn off debug mode (increasing speed)
+eca.append("-DGM_DEBUG_OFF")
+
+
+
+ext_modules = [
+    setuptools.Extension(
+        name="graphmuse.samplers.csamplers", sources=[os.path.join("src", "gmsamplersmodule.c")], extra_compile_args = eca,
+            extra_link_args = [])]
 
 os.environ["CC"] = "gcc"
 os.environ["CXX"] = "gcc"
@@ -26,9 +50,9 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Topic :: Scientific/Engineering :: Graph Deep Learning",
     ],
-    include_dirs=[numpy.get_include()],
+    include_dirs=[os.path.join(numpy.get_include(), "numpy"), "include", "../miniconda3/include/libxml2/libxml"],
     # ext_modules=[module],
-    ext_modules= module,
-    author='Emmanouil Karystinaios',
-    maintainer='Emmanouil Karystinaios'
+    ext_modules= ext_modules,
+    author='Emmanouil Karystinaios, Nimrod Varga',
+    maintainer='Emmanouil Karystinaios, Nimrod Varga'
 )

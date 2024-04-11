@@ -1,8 +1,71 @@
-import graphmuse as gm
+import graphmuse.samplers as sam
 import unittest
+import numpy as np
+import torch
+
+torch.random.manual_seed(0)
+np.random.seed(0)
+sam.c_set_seed(0)
 
 
 class TestSamplers(unittest.TestCase):
 
-        def test_gmsamplersmodule(self):
-            pass
+    def test_nodewise_sampling(self):
+        for nodewise_sampling_method in (sam.sample_nodewise,):
+            print(f"Unit Testing for {nodewise_sampling_method.__name__}")
+
+            V = 100
+            E = 4*V
+
+            edges = np.random.randint(0, V, (2, E), dtype=np.int32)
+
+            V = np.max(edges)
+
+            resort_idx = np.lexsort((edges[0], edges[1]))
+            edges = edges[:, resort_idx]
+
+            # Add random edge types
+            edges = np.vstack((edges, np.random.randint(0, 4, E, dtype=np.int32)))
+
+            g = sam.graph(edges)
+
+            target_size = np.random.randint(1, V//4, 1)[0]
+            target = np.unique(np.random.randint(0, V, target_size, np.int32))
+            depth = 2
+            samples_per_node = 3
+            samples_per_layer, edges_between_layers, load_per_layer, total_samples = nodewise_sampling_method(g, depth, samples_per_node, target)
+
+            self.assertTrue(len(samples_per_layer) == depth+1)
+            self.assertTrue(len(edges_between_layers) == depth)
+            self.assertTrue(len(load_per_layer) == depth)
+            self.assertTrue(samples_per_layer[-1].shape == target.shape)
+            self.assertTrue((sorted(samples_per_layer[-1]) == sorted(target)))
+
+            for l in range(depth):
+                self.assertTrue(torch.all(torch.unique(torch.hstack((samples_per_layer[l], samples_per_layer[l+1]))) == load_per_layer[l].sort()[0]))
+                current_edges = edges_between_layers[l]
+                # Check that each node is sampled at most once
+                samples_counter = dict()
+                for edge in current_edges.t():
+                    src = edge[0].item()
+                    dst = edge[1].item()
+                    if dst in samples_counter.keys():
+                        samples_counter[dst] += 1
+                    else:
+                        samples_counter[dst] = 1
+
+                for dst, c in samples_counter.items():
+                    self.assertTrue(c == min(samples_per_node, g.preneighborhood_count(dst)), f"count of {dst} is {c}, but pnc is {g.preneighborhood_count(dst)}")
+
+                unique_src = np.unique(current_edges[0])
+
+                self.assertTrue(unique_src.shape == samples_per_layer[l].shape)
+                self.assertTrue(list(unique_src) == sorted(samples_per_layer[l]))
+
+                unique_dst = current_edges[1]
+
+                for sample in samples_per_layer[l+1]:
+                    if sample not in unique_dst:
+                        self.assertTrue(g.preneighborhood_count(sample.item()) == 0)
+
+            print(f"{nodewise_sampling_method.__name__} passed all tests")
