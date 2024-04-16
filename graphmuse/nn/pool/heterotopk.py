@@ -110,7 +110,7 @@ class HeteroFilterEdges(Connect):
         for key in edge_index_dict.keys():
             src_key, _, dst_key = key
             if src_key == dst_key:
-                edge_attr_dict[key], edge_attr_dict[key] = filter_adj(
+                edge_index_dict[key], edge_attr_dict[key] = filter_adj(
                     edge_index_dict[key],
                     edge_attr_dict[key],
                     select_output[src_key].node_index,
