@@ -299,8 +299,8 @@ class HybridHGT(torch.nn.Module):
             input_channels: int,
             hidden_channels: int,
             num_layers: int,
-            heads: int =4,
-            dropout: float =0.5):
+            heads: int = 4,
+            dropout: float = 0.5):
         super().__init__()
         self.num_layers = num_layers
         self.convs = torch.nn.ModuleList()
@@ -313,7 +313,7 @@ class HybridHGT(torch.nn.Module):
             self.layer_norms.append(nn.LayerNorm(hidden_channels))
 
         self.rnn = nn.GRU(
-            input_size=input_channels, hidden_size=hidden_channels // 2, num_layers=2, batch_first=True, bidirectional=True,
+            input_size=input_channels, hidden_size=hidden_channels // 2, num_layers=num_layers, batch_first=True, bidirectional=True,
             dropout=dropout)
         self.rnn_norm = nn.LayerNorm(hidden_channels)
         self.rnn_mlp = nn.Sequential(
