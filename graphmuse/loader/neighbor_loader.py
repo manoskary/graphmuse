@@ -38,6 +38,7 @@ class MuseNeighborLoader(DataLoader):
             device: Union[str, torch.device] = "cpu",
             is_sorted: bool = False,
             share_memory: bool = False,
+            order_batch: bool = True,
             **kwargs,
         ):
         if filter_per_worker is None:
@@ -52,6 +53,7 @@ class MuseNeighborLoader(DataLoader):
         self.filter_per_worker = filter_per_worker
         self.custom_cls = custom_cls
         self.device = device
+        self.order_batch = order_batch
         self.is_sorted = is_sorted
         self.share_memory = share_memory
         self.node_time: Optional[Dict[NodeType, Tensor]] = None
@@ -82,10 +84,18 @@ class MuseNeighborLoader(DataLoader):
     def collate_fn(self, data_batch: List[HeteroData]) -> Batch:
         r"""Samples a subgraph from a batch of input nodes."""
         data_list = []
+        target_nodes = []
         for data in data_batch:
             data = data.contiguous()
-            data_out = self.sample_from_each_graph(data)
+            data_out, target_out = self.sample_from_each_graph(data)
             data_list.append(data_out)
+            target_nodes.append(target_out)
+        # re-order the data list based on the number of target nodes in descending order
+        if self.order_batch:
+            target_nodes = np.array(target_nodes)
+            idx = np.argsort(target_nodes)[::-1]
+            data_list = [data_list[i] for i in idx]
+        # create a batch object
         batch_out = Batch.from_data_list(data_list)
         if self.transform is not None:
             batch_out = self.transform(batch_out, self.num_neighbors.num_hops)
@@ -100,7 +110,7 @@ class MuseNeighborLoader(DataLoader):
             if WITH_PYG_LIB and self.fetch_neighbors:
                 self.set_neighbor_mask_node(data, {k: [v.shape[0]] for k, v in data.x_dict.items()})
                 self.set_neighbor_mask_edge(data, {k: [v.shape[1]] for k, v in data.edge_index_dict.items()})
-            return data
+            return data, data["note"].num_nodes
         # sample nodes
         target_nodes = random_score_region_torch(data, self.subgraph_size, node_type="note")
         target_lenghts = {k: v.shape[0] for k, v in target_nodes.items()}
@@ -129,7 +139,7 @@ class MuseNeighborLoader(DataLoader):
         # for k, v in target_lenghts.items():
         #     data_out[k].num_sampled_nodes = v
 
-        return data_out
+        return data_out, len(target_nodes["note"])
 
     def sample_hetero_graph(self, data, target_nodes, colptr_dict, row_dict, to_edge_type):
         # Sample subgraph:
