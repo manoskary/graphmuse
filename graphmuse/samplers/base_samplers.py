@@ -15,7 +15,7 @@ class SubgraphMultiplicitySampler(Sampler):
         self.data_source = data_source
         bucket_boundaries = [2*max_subgraph_size, 5*max_subgraph_size, 10*max_subgraph_size, 20*max_subgraph_size]
         self.sampling_sizes = (np.array([2, 4, 10, 20, 40])*multiplicity_ratio).astype(int)
-        self.ind_n_len = [(i, g.num_nodes) for i, g in enumerate(data_source)]
+        self.ind_n_len = [(i, num_nodes) for i, num_nodes in enumerate(data_source)]
         self.bucket_boundaries = bucket_boundaries
         self.drop_last = drop_last
         self.batch_size = batch_size
