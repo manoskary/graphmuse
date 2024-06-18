@@ -46,7 +46,7 @@ class MuseNeighborLoader(DataLoader):
             filter_per_worker = infer_filter_per_worker(graphs)
         self.is_dataset = isinstance(graphs, InMemoryDataset)
         self.graphs = graphs
-        self.nlengths = np.array([graphs[i].num_nodes for i in range(graphs.len())]) if self.is_dataset else np.array([g.num_nodes for g in graphs])
+        self.nlengths = np.array([graphs[i].num_nodes for i in range(len(graphs))]) if self.is_dataset else np.array([g.num_nodes for g in graphs])
         self.metadata = graphs[0].metadata()
         self.num_neighbors = num_neighbors if num_neighbors is not None else {k: [0] for k in self.metadata[1]}
         self.subgraph_size = subgraph_size
