@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import SAGEConv, HeteroConv, GATConv, MessagePassing, HGTConv
+from torch_geometric.nn import SAGEConv, HeteroConv, GATConv, MessagePassing, HGTConv, JumpingKnowledge
 from graphmuse.utils.graph_utils import trim_to_layer
 from torch_geometric.utils import trim_to_layer as trim_to_layer_pyg
 from graphmuse.nn.conv.gat import CustomGATConv
@@ -292,6 +292,7 @@ class HybridHGT(torch.nn.Module):
         num_layers (int): Number of layers
         heads (int, optional): Number of attention heads. Defaults to 4.
         dropout (float, optional): Dropout rate. Defaults to 0.5.
+        jk (bool, optional): Whether to use Jumping Knowledge. Defaults to False.
     """
     def __init__(
             self,
@@ -300,7 +301,10 @@ class HybridHGT(torch.nn.Module):
             hidden_channels: int,
             num_layers: int,
             heads: int = 4,
-            dropout: float = 0.5):
+            dropout: float = 0.5,
+            jk = False
+
+    ):
         super().__init__()
         self.num_layers = num_layers
         self.convs = torch.nn.ModuleList()
@@ -324,6 +328,8 @@ class HybridHGT(torch.nn.Module):
             nn.Linear(hidden_channels, hidden_channels),
         )
         self.cat_proj = nn.Linear(hidden_channels * 2, hidden_channels)
+        if jk:
+            self.jk = JumpingKnowledge(mode='lstm', channels=hidden_channels, num_layers=num_layers)
 
     def hybrid_forward(self, x, batch):
         # NOTE optimize sampling to order sequences by length
@@ -341,6 +347,7 @@ class HybridHGT(torch.nn.Module):
 
     def forward(self, x_dict, edge_index_dict, batch_dict, batch_size=None, neighbor_mask_node=None,
                 neighbor_mask_edge=None, return_edge_index=False):
+        xs = []
         if batch_dict is None:
             batch_dict = {key: torch.zeros(x.size(0), dtype=torch.long, device=x.device) for key, x in x_dict.items()}
         if neighbor_mask_node is None:
@@ -363,7 +370,11 @@ class HybridHGT(torch.nn.Module):
             if i != len(self.convs) - 1:
                 x_dict = {key: self.layer_norms[i](x) for key, x in x_dict.items()}
                 x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
-        x_gnn = x_dict["note"][:batch_size]
+
+            if hasattr(self, 'jk'):
+                xs.append(x_dict["note"][:batch_size])
+
+        x_gnn = self.jk(xs) if hasattr(self, 'jk') else x_dict["note"][:batch_size]
         x = self.cat_proj(torch.cat([x, x_gnn], dim=-1))
         if return_edge_index:
             # Trim Edge Index to only notes and remove edge_indices > batch_size
