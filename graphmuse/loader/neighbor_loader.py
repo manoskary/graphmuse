@@ -70,8 +70,9 @@ class MuseNeighborLoader(DataLoader):
         input_type = "note"
         base_sampler = SubgraphMultiplicitySampler(self.nlengths, max_subgraph_size=subgraph_size, batch_size=self.batch_size,
                                                    multiplicity_ratio=subgraph_sample_ratio)
+        # Remove batch_sampler from kwargs
+        kwargs.pop('batch_sampler', None)
         # Get node type (or `None` for homogeneous graphs):
-
         dataset = ConcatDataset([self.graphs]) if not self.is_dataset else self.graphs
         super().__init__(dataset, collate_fn=self.collate_fn, batch_size=1, batch_sampler=base_sampler, **kwargs)
 
