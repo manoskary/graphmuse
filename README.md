@@ -1,12 +1,12 @@
 # GraphMuse
 GraphMuse is a Graph Deep Learning Library for Music.
 
-This library intents to address Graph Deep Learning techniques and models applied specifically on Music Scores.
+This library intents to address Graph Deep Learning techniques and models applied specifically to Music Scores.
 
 It contains a core set of graph-based music representations, such as a Heterogeneous and a Homogeneous Score Graph class.
-It includes functionalities for this graphs such as saving, loading and batching graphs together.
+It includes functionalities for these graphs such as saving, loading, and batching graphs together.
 
-The main core of the library includes accelarated SOTA sampling strategies for Large Graphs, 
+The main core of the library includes accelerated SOTA sampling strategies for Large Graphs, 
 which are implemented in C11 and CUDA. 
 
 
@@ -16,6 +16,17 @@ Modules of the library contain implementations of the following models:
 - Contrastive Graph Neural Networks similar to SimCLR;
 - Hierarchical Graph Auto-Encoders with edge Polling;
 - Hyperbolic Graph Neural Networks with Poincare Topology.
+
+## Cite
+GraphMuse was published at ISMIR 2024. To cite our work:
+```bibtex
+@inproceedings{karystinaios2024graphmuse,
+  title={GraphMuse: A Library for Symbolic Music Graph Processing},
+  author={Karystinaios, Emmanouil and Widmer, Gerhard},
+  booktitle={Proceedings of the International Society for Music Information Retrieval Conference (ISMIR)},
+  year={2024}
+}
+```
 
 ### Dependencies
 
