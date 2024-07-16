@@ -4,7 +4,7 @@ import numpy
 
 
 dirname = os.path.dirname(__file__)
-
+#
 if os.name=='posix':
     print("Compiling for POSIX systems. . .")
     eca = ["-std=c11"]
@@ -23,7 +23,8 @@ elif sys.platform.startswith('win'):
     eca.append("-DWindows")
 
 else:
-    raise Exception("Unsupported OS, please use Linux or Windows.")
+    eca = []
+    # raise Exception("Unsupported OS, please use Linux or Windows.")
 
 # add flag to turn off debug mode (increasing speed)
 eca.append("-DGM_DEBUG_OFF")
@@ -33,10 +34,10 @@ eca.append("-DGM_DEBUG_OFF")
 ext_modules = [
     setuptools.Extension(
         name="graphmuse.samplers.csamplers", sources=[os.path.join("src", "gmsamplersmodule.c")], extra_compile_args = eca,
-            extra_link_args = [])]
+            extra_link_args = [], include_dirs=[os.path.join(numpy.get_include(), "numpy"), "include"])]
 
-os.environ["CC"] = "gcc"
-os.environ["CXX"] = "gcc"
+# os.environ["CC"] = "gcc"
+# os.environ["CXX"] = "gcc"
 
 setuptools.setup(
     name='graphmuse',
@@ -50,9 +51,9 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Topic :: Scientific/Engineering :: Graph Deep Learning",
     ],
-    include_dirs=[os.path.join(numpy.get_include(), "numpy"), "include", "../miniconda3/include/libxml2/libxml"],
+    # , "../miniconda3/include/libxml2/libxml"],
     # ext_modules=[module],
     ext_modules= ext_modules,
     author='Emmanouil Karystinaios, Nimrod Varga',
-    maintainer='Emmanouil Karystinaios, Nimrod Varga'
+    maintainer='Emmanouil Karystinaios'
 )
