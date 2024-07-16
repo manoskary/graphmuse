@@ -42,9 +42,9 @@ ext_modules = [
 long_description = open(os.path.join(os.path.dirname(__file__), 'README.md'), "r").read()
 
 setuptools.setup(
-    name='graphmuse',
+    name='GraphMuse',
     version='0.0.1',
-    description='Graph Deep Learning for Music',
+    description='GraphMuse is a Python Library for Graph Deep Learning on Symbolic Music.',
     long_description=long_description,
     long_description_content_type='text/markdown',
     packages=setuptools.find_packages(),
@@ -55,8 +55,6 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Topic :: Scientific/Engineering :: Graph Deep Learning",
     ],
-    # , "../miniconda3/include/libxml2/libxml"],
-    # ext_modules=[module],
     ext_modules= ext_modules,
     author='Emmanouil Karystinaios, Nimrod Varga',
     maintainer='Emmanouil Karystinaios'
