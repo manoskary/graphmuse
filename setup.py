@@ -7,7 +7,7 @@ dirname = os.path.dirname(__file__)
 #
 if os.name=='posix':
     print("Compiling for POSIX systems. . .")
-    eca = ["-std=c11"]
+    eca = [] # ["-std=c11"]
     eca.append("-DPOSIX")
 
     # from psutil import cpu_count
@@ -19,7 +19,7 @@ if os.name=='posix':
 
 elif sys.platform.startswith('win'):
     print("Compiling for Windows. . .")
-    eca = ["/std:c11"]
+    eca = [] # ["/std:c11"]
     eca.append("-DWindows")
 
 else:
@@ -39,10 +39,14 @@ ext_modules = [
 # os.environ["CC"] = "gcc"
 # os.environ["CXX"] = "gcc"
 
+long_description = open(os.path.join(os.path.dirname(__file__), 'README.md'), "r").read()
+
 setuptools.setup(
     name='graphmuse',
     version='0.0.1',
     description='Graph Deep Learning for Music',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     packages=setuptools.find_packages(),
     classifiers=[
         "Development Status :: 0 - Gamma",
