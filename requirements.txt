@@ -1,4 +1,3 @@
-partitura>=1.3.0
-cython==0.29.32
+partitura>=1.5.0
 psutil==5.9.5
-numpy==1.23.1
+numpy>=1.23.1

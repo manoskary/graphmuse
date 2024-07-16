@@ -23,19 +23,22 @@ def edges_from_note_array(note_array):
 
     edg_src = list()
     edg_dst = list()
-    start_rest_index = len(note_array)
+    edge_type = list()
     for i, x in enumerate(note_array):
         for j in np.where((note_array["onset_div"] == x["onset_div"]))[0]: #& (note_array["id"] != x["id"]))[0]:
             edg_src.append(i)
             edg_dst.append(j)
+            edge_type.append(0)
 
         for j in np.where(note_array["onset_div"] == x["onset_div"] + x["duration_div"])[0]:
             edg_src.append(i)
             edg_dst.append(j)
+            edge_type.append(1)
 
         for j in np.where((x["onset_div"] < note_array["onset_div"]) & (x["onset_div"] + x["duration_div"] > note_array["onset_div"]))[0]:
             edg_src.append(i)
             edg_dst.append(j)
+            edge_type.append(2)
 
     end_times = note_array["onset_div"] + note_array["duration_div"]
     for et in np.sort(np.unique(end_times))[:-1]:
@@ -48,9 +51,11 @@ def edges_from_note_array(note_array):
                 for j in dst:
                     edg_src.append(i)
                     edg_dst.append(j)
+                    edge_type.append(3)
 
     edges = np.array([edg_src, edg_dst])
-    return edges
+    edge_types = np.array(edge_type)
+    return edges, edge_types
 
 
 class TestGraphMuse(unittest.TestCase):
@@ -61,12 +66,12 @@ class TestGraphMuse(unittest.TestCase):
         score_path = os.path.join(os.path.dirname(__file__), "samples", "wtc1f01.musicxml")
         score = pt.load_score(score_path)
         note_array = score.note_array()
-        edges_python = np.sort(edges_from_note_array(note_array))
+        edges_python = np.sort(edges_from_note_array(note_array)[0])
         edge_list, edge_types = sam.compute_edge_list(note_array['onset_div'].astype(np.int32), note_array['duration_div'].astype(np.int32))
         edges_c = np.sort(edge_list)
         self.assertTrue(edges_c.shape==edges_python.shape)
         self.assertTrue((edges_c==edges_python).all())
-        print("Edgle list creation assertions passed")
+        print("Edge list creation assertions passed")
 
     def test_graph_creation(self):
         part = pt.load_score(pt.EXAMPLE_MUSICXML)[0]
@@ -97,19 +102,24 @@ class TestGraphMuse(unittest.TestCase):
         note_array = np.vstack((ons, dur, pitch, beats))
         # transform to structured array
         note_array = np.core.records.fromarrays(note_array, names='onset_div,duration_div,pitch,onset_beat')
+        # sort onset_div
+        note_array = note_array[np.argsort(note_array["onset_div"])]
 
         # create features array of shape (num_nodes, num_features)
         time_baseline = time.time()
-        _ = edges_from_note_array(note_array)
+        edges_na, etype_na = edges_from_note_array(note_array)
         time_baseline = time.time() - time_baseline
 
         time_c = time.time()
-        _ = sam.compute_edge_list(note_array['onset_div'].astype(np.int32),
+        edges_gm, etype_gm = sam.compute_edge_list(note_array['onset_div'].astype(np.int32),
                                                       note_array['duration_div'].astype(np.int32))
         time_c = time.time() - time_c
         print("Time for python edge list creation: ", time_baseline)
         print("Time for C edge list creation: ", time_c)
         self.assertTrue(time_c < time_baseline)
+        self.assertTrue(edges_na.shape == edges_gm.shape)
+        # sort src edges to compare
+        self.assertTrue((np.sort(edges_na, axis=1) == np.sort(edges_gm, axis=1)).all())
 
 
 
