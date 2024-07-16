@@ -5,9 +5,9 @@ from graphmuse.nn.models.metrical_gnn import MetricalGNN
 import torch_scatter
 
 
-class CadenceGNNPytorch(nn.Module):
+class CadenceGNN(nn.Module):
     def __init__(self, metadata, input_dim, hidden_dim, output_dim, num_layers, dropout=0.5, hybrid=False):
-        super(CadenceGNNPytorch, self).__init__()
+        super(CadenceGNN, self).__init__()
         self.gnn = MetricalGNN(
             input_dim=input_dim, hidden_dim=hidden_dim, output_dim=hidden_dim // 2,
             num_layers=num_layers, metadata=metadata, dropout=dropout)
