@@ -1,3 +1,3 @@
+numpy==1.26.4
 partitura>=1.5.0
 psutil==5.9.5
-numpy==1.26.4
