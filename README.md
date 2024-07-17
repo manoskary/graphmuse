@@ -1,4 +1,10 @@
-![GraphMuse](./assets/graphmuse_long.png)
+<p align="center">
+   <img src="assets/graphmuse_long.png" height="300">
+</p>
+
+[![Latest Release](https://img.shields.io/github/v/release/manoskary/graphmuse)](https://github.com/manoskary/graphmuse/releases)
+[![Pypi Package](https://badge.fury.io/py/graphmuse.svg)](https://badge.fury.io/py/graphmuse)
+[![Unittest Status](https://github.com/manoskary/graphmuse/workflows/Tests/badge.svg)](https://github.com/manoskary/graphmuse/actions?query=workflow%3ATests)
 
 # GraphMuse
 GraphMuse is a Python Library for Graph Deep Learning on Symbolic Music.
