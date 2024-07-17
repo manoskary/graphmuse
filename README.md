@@ -1,3 +1,5 @@
+![GraphMuse](./assets/graphmuse_long.png)
+
 # GraphMuse
 GraphMuse is a Python Library for Graph Deep Learning on Symbolic Music.
 This library intents to address Graph Deep Learning techniques and models applied specifically to Music Scores.
@@ -6,32 +8,28 @@ It contains a core set of graph-based music representations, based on Pytorch Ge
 It includes functionalities for these graphs such as Sampling and several Graph Convolutional Networks.
 
 The main core of the library includes sampling strategies for Music Score Graphs, Dataloaders, Graph Creation classes, and Graph Convolutional Networks.
-The graph creation is implemented partly in C11 and works in unison with the Partitura library for parsing symbolic music.
+The graph creation is implemented partly in C and works in unison with the Partitura library for parsing symbolic music.
 
 
 It implements a variety of graph neural networks for music, including MusGConv, NoteGNN, MeasureGNn, BeatGNN, MetricalGNN, and HybridGNN.
 
-## Cite
-GraphMuse was published at ISMIR 2024. To cite our work:
-```bibtex
-@inproceedings{karystinaios2024graphmuse,
-  title={GraphMuse: A Library for Symbolic Music Graph Processing},
-  author={Karystinaios, Emmanouil and Widmer, Gerhard},
-  booktitle={Proceedings of the International Society for Music Information Retrieval Conference (ISMIR)},
-  year={2024}
-}
-```
+Read the GraphMuse paper [here](https://arxiv.org/).
 
-### Dependencies
+### Why GraphMuse?
 
-GraphMuse is built on top of PyTorch and Pytorch Geometric. Some additional dependencies are required to run the code:
-- PyTorch Sparse
-- PyTorch Scatter
+GraphMuse is a library for symbolic music graph processing. It provides a set of tools for creating, manipulating, and learning from symbolic music graphs. It is built on top of PyTorch Geometric and provides a set of graph convolutional networks tailored to music data. GraphMuse is designed to be easy to use and flexible, allowing users to experiment with different graph representations and models for their music data.
+
+GraphMuse aims to provide a set of tools for symbolic music graph processing that are easy to use and flexible. 
 
 
 ## Installation
 
-To install Graphmuse you first need to install the Pytorch version suitable for your system.
+
+GraphMuse is built on top of PyTorch and Pytorch Geometric. Therefore you need to install Pytorch and Pytorch Geometric first.
+
+#### Pytorch and Pytorch Geometric Installation
+
+First you need to install the Pytorch version suitable for your system.
 You can find the instructions [here](https://pytorch.org/get-started/locally/).
 
 You also need to install Pytorch Geometric. You can find the instructions [here](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html).
@@ -40,14 +38,24 @@ We recommend to use conda:
 conda install conda install pyg -c pyg
 ```
 
+#### GraphMuse Installation
+
+##### Using pip
+
 You can install graphmuse along with the dependencies using pip:
 ```shell
 pip install graphmuse
 ```
 
+##### From Source
 
+You can also install GraphMuse from source. First, clone the repository:
+```shell
+git clone https://github.com/manoskary/graphmuse.git
+cd graphmuse
+```
 
-Or use pip for the rest of the dependencies:
+Then use pip for the rest of the dependencies:
 ```shell
 pip install --verbose git+https://github.com/pyg-team/pyg-lib.git
 pip install --verbose torch_scatter
@@ -158,4 +166,17 @@ dataloader = MuseNeighborLoader(graphs, subgraph_size=subgraph_size, batch_size=
 # Iterate over the dataloader
 for batch in dataloader:
     print(batch)
+```
+
+
+## Citing GraphMuse
+
+GraphMuse was published at ISMIR 2024. To cite our work:
+```bibtex
+@inproceedings{karystinaios2024graphmuse,
+  title={GraphMuse: A Library for Symbolic Music Graph Processing},
+  author={Karystinaios, Emmanouil and Widmer, Gerhard},
+  booktitle={Proceedings of the International Society for Music Information Retrieval Conference (ISMIR)},
+  year={2024}
+}
 ```
