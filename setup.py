@@ -48,6 +48,14 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     packages=setuptools.find_packages(),
+    keywords=[
+    "deep-learning",
+    "symbolic-music",
+    "pytorch",
+    "geometric-deep-learning",
+    "graph-neural-networks",
+    "graph-convolutional-networks",
+    ],
     classifiers=[
         "Development Status :: 0 - Gamma",
         "Intended Audience :: Developers",
@@ -55,7 +63,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Topic :: Scientific/Engineering :: Graph Deep Learning",
     ],
-    ext_modules= ext_modules,
-    author='Emmanouil Karystinaios, Nimrod Varga',
+    ext_modules=ext_modules,
+    author='Emmanouil Karystinaios',
     maintainer='Emmanouil Karystinaios'
 )
