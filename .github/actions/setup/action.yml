@@ -46,8 +46,12 @@ runs:
       shell: bash
 
     - name: Install Pytorch Geometric ${{ inputs.torch-version }}+${{ inputs.cuda-version }}
-      run:
+      run: |
         pip install torch-geometric
+        pip install torch-scatter -f https://data.pyg.org/whl/torch-${{ inputs.torch-version }}+${{ inputs.cuda-version }}.html
+        pip install torch-sparse -f https://data.pyg.org/whl/torch-${{ inputs.torch-version }}+${{ inputs.cuda-version }}.html
+        pip install torch-cluster -f https://data.pyg.org/whl/torch-${{ inputs.torch-version }}+${{ inputs.cuda-version }}.html        
+        pip install pyg-lib -f https://data.pyg.org/whl/torch-${{ inputs.torch-version }}+${{ inputs.cuda-version }}.html
       shell: bash
 
     - name: Install pyg-lib
