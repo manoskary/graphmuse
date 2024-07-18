@@ -33,7 +33,7 @@ eca.append("-DGM_DEBUG_OFF")
 
 ext_modules = [
     setuptools.Extension(
-        name="graphmuse.samplers.csamplers", sources=[os.path.join("src", "gmsamplersmodule.c")], extra_compile_args = eca,
+        name="graphmuse.samplers.csamplers", sources=[os.path.join(os.path.dirname(__file__), "src", "gmsamplersmodule.c")],
             extra_link_args = [], include_dirs=[os.path.join(numpy.get_include(), "numpy"), "include"])]
 
 # os.environ["CC"] = "gcc"
@@ -42,7 +42,7 @@ ext_modules = [
 long_description = open(os.path.join(os.path.dirname(__file__), 'README.md'), "r").read()
 
 setuptools.setup(
-    name='GraphMuse',
+    name='graphmuse',
     version='0.0.1',
     description='GraphMuse is a Python Library for Graph Deep Learning on Symbolic Music.',
     long_description=long_description,

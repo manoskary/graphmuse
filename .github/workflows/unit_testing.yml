@@ -33,5 +33,6 @@ jobs:
         shell: bash
       - name: Test with pytest
         run: |
-          python -m unittest discover ./tests/ 'test*.py'
+          cd tests
+          python -m unittest discover . 'test*.py'
         shell: bash
