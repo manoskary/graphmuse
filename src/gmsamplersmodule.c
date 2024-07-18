@@ -6,9 +6,9 @@
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #define PY_ARRAY_UNIQUE_SYMBOL sam_ARRAY_API
-#include <ndarraytypes.h>
-#include <ndarrayobject.h>
-// #include <numpy/arrayobject.h>
+#include <numpy/ndarraytypes.h>
+//#include <ndarrayobject.h>
+#include <numpy/arrayobject.h>
 
 
 #define MACRO_MAX(a,b) ((a)<(b))? (b) : (a)
@@ -38,10 +38,38 @@ typedef Node EdgeType;
 #define Node_To_Index(n) ((Index)(n))
 #define Index_To_Node(i) ((Node)(i))
 
+#ifndef GM_DEBUG_OFF
+#define ASSERT_POW2(N){ \
+	Key ASSERT_POW2_N = N; \
+	Key ASSERT_POW2_BIT_COUNTER=0; \
+	while(ASSERT_POW2_N>0){ \
+		ASSERT_POW2_BIT_COUNTER+=(Key)(ASSERT_POW2_N&1); \
+		ASSERT_POW2_N>>=1; \
+	} \
+	ASSERT(ASSERT_POW2_BIT_COUNTER==1); \
+}
+#endif
 
+#define MOD_POW2(K, P2) ((K)&(P2-1))
 
-#include <utils.c>
-#include <GM_assert.h>
+// taken from here https://barrgroup.com/embedded-systems/how-to/define-assert-macro
+
+#ifndef GM_DEBUG_OFF
+#define ASSERT(expr) \
+    if(expr)\
+    {}\
+    else{\
+        printf("Assertion failed in %s at line %d\n>>\t%s\t<<\n", __FILE__, __LINE__, #expr); \
+        abort(); \
+    }
+#endif
+
+#ifdef GM_DEBUG_OFF
+#define ASSERT(expr){}
+#endif
+
+//#include <utils.c>
+//#include <GM_assert.h>
 #ifdef Thread_Count_Arg
 #include <mt.c>
 #include <threadpool.c>

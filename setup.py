@@ -33,8 +33,8 @@ eca.append("-DGM_DEBUG_OFF")
 
 ext_modules = [
     setuptools.Extension(
-        name="graphmuse.samplers.csamplers", sources=[os.path.join(os.path.dirname(__file__), "src", "gmsamplersmodule.c")],
-            extra_link_args = [], include_dirs=[os.path.join(numpy.get_include(), "numpy"), "include"])]
+        name="graphmuse.samplers.csamplers", sources=["src/gmsamplersmodule.c"],
+            extra_link_args = [], include_dirs=[numpy.get_include(), "include"])]
 
 # os.environ["CC"] = "gcc"
 # os.environ["CXX"] = "gcc"
