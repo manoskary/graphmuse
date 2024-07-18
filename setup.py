@@ -48,6 +48,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     packages=setuptools.find_packages(),
+    setup_requires=['numpy'],
     keywords=[
     "deep-learning",
     "symbolic-music",
