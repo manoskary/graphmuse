@@ -20,6 +20,9 @@ jobs:
         with:
           python-versions: 'cp310-cp310 cp311-cp311'
           build-requirements: 'numpy'
+      - name: Remove non manylinux wheels
+        run: |
+          rm -rf dist/*-linux_*.whl
       - name: Publish package
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
