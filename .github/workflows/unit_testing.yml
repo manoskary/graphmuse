@@ -27,12 +27,11 @@ jobs:
           python -m pip install --upgrade pip          
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         shell: bash
-      - name: Install package with pip
+      - name: Install Graphmuse
         run:
-          pip install . -v
+          python setup.py build_ext --inplace
         shell: bash
       - name: Test with pytest
-        run: |
-          cd tests
-          python -m unittest discover . 'test*.py'
+        run:
+          python -m unittest discover ./tests/ 'test*.py'
         shell: bash
