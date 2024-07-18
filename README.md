@@ -19,7 +19,7 @@ The graph creation is implemented partly in C and works in unison with the Parti
 
 It implements a variety of graph neural networks for music, including MusGConv, NoteGNN, MeasureGNn, BeatGNN, MetricalGNN, and HybridGNN.
 
-Read the GraphMuse paper [here]([https://arxiv.org/](https://arxiv.org/abs/2407.12671)).
+Read the GraphMuse paper [here](https://arxiv.org/abs/2407.12671).
 
 ### Why GraphMuse?
 
