@@ -49,6 +49,18 @@ setuptools.setup(
     long_description_content_type='text/markdown',
     packages=setuptools.find_packages(),
     setup_requires=['numpy'],
+    python_requires='>=3.10',
+    install_requires=[
+        "torch",
+        "torch-geometric",
+        "torch-sparse",
+        "torch-scatter",
+        "torch-cluster",
+        "pyg-lib",
+        "numpy>=1.21.0",
+        "partitura>=1.5.0",
+        "psutil==5.9.5",
+    ],
     keywords=[
     "deep-learning",
     "symbolic-music",
