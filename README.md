@@ -72,7 +72,7 @@ pip install partitura
 
 and install using the setup file:
 ```shell
-python setup.py build_ext -i
+python setup.py install
 ```
 
 ## Usage
