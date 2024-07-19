@@ -41,7 +41,7 @@ You can find the instructions [here](https://pytorch.org/get-started/locally/).
 You also need to install Pytorch Geometric. You can find the instructions [here](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html).
 We recommend to use conda:
 ```shell
-conda install conda install pyg -c pyg
+conda install pyg -c pyg
 ```
 
 #### GraphMuse Installation
