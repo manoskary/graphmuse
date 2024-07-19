@@ -49,7 +49,7 @@ setuptools.setup(
     long_description_content_type='text/markdown',
     packages=setuptools.find_packages(),
     setup_requires=['numpy'],
-    python_requires='>=3.10',
+    python_requires='>=3.8',
     install_requires=[
         "torch",
         "torch-geometric",
