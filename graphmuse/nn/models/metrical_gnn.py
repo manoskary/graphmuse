@@ -189,7 +189,9 @@ class MetricalGNN(nn.Module):
             nn.Linear(hidden_dim, output_dim)
         )
 
-    def forward(self, x_dict, edge_index_dict, neighbor_mask_node, neighbor_mask_edge):
+    def forward(self, x_dict, edge_index_dict, neighbor_mask_node=None, neighbor_mask_edge=None):
+        neighbor_mask_edge = neighbor_mask_edge if neighbor_mask_edge is not None else {k:torch.ones(v.shape[1]).to(v.device) for k,v in edge_index_dict.items()}
+        neighbor_mask_node = neighbor_mask_node if neighbor_mask_node is not None else {k:torch.ones(v.shape[0]).to(v.device) for k,v in x_dict.items()}
         x_dict = self.gnn(x_dict, edge_index_dict, neighbor_mask_node, neighbor_mask_edge)
         note = x_dict["note"]
         # Return the output
