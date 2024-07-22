@@ -91,6 +91,7 @@ import torch
 num_input_features = 10
 num_hidden_features = 10
 num_output_features = 10
+num_layers = 1
 # metadata needs to be provided for the metrical graph similarly to Pytorch Geometric heterogeneous graph modules.
 metadata = (
     ['note'],
@@ -98,7 +99,7 @@ metadata = (
 )
 
 # Create an instance of the MetricalGNN class
-metrical_gnn = gmnn.MetricalGNN(num_input_features, num_hidden_features, num_output_features, metadata=metadata)
+metrical_gnn = gmnn.MetricalGNN(num_input_features, num_hidden_features, num_output_features, num_layers, metadata=metadata)
 
 # Create some dummy data for the forward pass
 num_nodes = 5
