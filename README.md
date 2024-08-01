@@ -1,5 +1,5 @@
 <p align="center">
-   <img src="assets/graphmuse_long.png" height="300">
+   <img src="graphmuse/assets/graphmuse.png" height="300">
 </p>
 
 [![Latest Release](https://img.shields.io/github/v/release/manoskary/graphmuse)](https://github.com/manoskary/graphmuse/releases)
