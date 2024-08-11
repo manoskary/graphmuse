@@ -30,8 +30,12 @@ GraphMuse aims to provide a set of tools for symbolic music graph processing tha
 
 ## Installation
 
-
 GraphMuse is built on top of PyTorch and Pytorch Geometric. Therefore you need to install Pytorch and Pytorch Geometric first.
+We recommend to use conda or any other virtual environment to install and experiment with _GraphMuse_. _GraphMuse_ is compatible with python 3.8 or later.
+To install a conda environment ensure that conda is installed in your system ([info here](https://docs.anaconda.com/miniconda/miniconda-install/)) and then use:
+```shell
+conda install -n graphmuse python=3.11 pip
+```
 
 #### Pytorch and Pytorch Geometric Installation
 
@@ -53,7 +57,20 @@ You can install graphmuse along with the dependencies using pip:
 pip install graphmuse
 ```
 
-##### From Source
+##### Troubleshooting
+
+If you encounter problems during the installation due to missing the `pyg-lib` package you can install it using:
+```shell 
+pip install pyg-lib -f https://data.pyg.org/whl/torch-${TORCH}+${CUDA}.html
+```
+by replacing your version of Torch and CUDA. To use CPU just type `cpu`. More info [here](https://github.com/pyg-team/pyg-lib).
+
+Sometimes the optional dependencies of Pytorch Geometric that Graphmuse needs to work properly might cause problems due to C compilation or system compatibility.
+If you have problems with some of the torch scatter, sparse, cluster, or pyg-lib packages please follow the instructions [here](https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html#additional-libraries). 
+
+When encountering problems with some of these dependency packages usually the best solution is to start fresh with the installation.
+
+##### Installing from Source
 
 You can also install GraphMuse from source. First, clone the repository:
 ```shell
