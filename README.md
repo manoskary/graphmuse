@@ -1,10 +1,16 @@
+[![Python](https://img.shields.io/badge/-Python_3.1+-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![Pytorch](https://img.shields.io/badge/PyTorch_2.0+-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
+[![Paper](http://img.shields.io/badge/paper-arxiv.2407.12671-B31B1B.svg)](https://arxiv.org/abs/2407.12671)
+[![Conference](http://img.shields.io/badge/ISMIR-2024-4b44ce.svg)](https://ismir2024.ismir.net/papers)
+[![Latest Release](https://img.shields.io/github/v/release/manoskary/graphmuse)](https://github.com/manoskary/graphmuse/releases)
+[![Pypi Package](https://badge.fury.io/py/graphmuse.svg)](https://badge.fury.io/py/graphmuse)
+[![Unittest Status](https://github.com/manoskary/graphmuse/workflows/Tests/badge.svg)](https://github.com/manoskary/graphmuse/actions?query=workflow%3ATests)
+
 <p align="center">
    <img src="graphmuse/assets/graphmuse.png" height="300">
 </p>
 
-[![Latest Release](https://img.shields.io/github/v/release/manoskary/graphmuse)](https://github.com/manoskary/graphmuse/releases)
-[![Pypi Package](https://badge.fury.io/py/graphmuse.svg)](https://badge.fury.io/py/graphmuse)
-[![Unittest Status](https://github.com/manoskary/graphmuse/workflows/Tests/badge.svg)](https://github.com/manoskary/graphmuse/actions?query=workflow%3ATests)
+
 
 # GraphMuse
 GraphMuse is a Python Library for Graph Deep Learning on Symbolic Music.
