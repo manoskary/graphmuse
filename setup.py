@@ -56,7 +56,7 @@ setuptools.setup(
         "torch-sparse",
         "torch-scatter",
         "torch-cluster",
-        "pyg-library",
+        "pyg-lib",
         "numpy>=1.21.0",
         "partitura>=1.5.0",
         "psutil==5.9.5",
