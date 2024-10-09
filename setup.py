@@ -48,7 +48,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     packages=setuptools.find_packages(),
-    setup_requires=['numpy'],
+    setup_requires=['numpy', "torch"],
     python_requires='>=3.8',
     install_requires=[
         "torch",
