@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class HeteroAttention(nn.Module):
     def __init__(self, n_hidden, n_layers):
         super(HeteroAttention, self).__init__()

@@ -236,9 +236,9 @@ def create_score_graph(
     graph["note"].x = torch.from_numpy(features).float() if isinstance(features, np.ndarray) else features.float()
     if labels is not None:
         graph["note"].y = torch.from_numpy(labels).long() if isinstance(labels, np.ndarray) else labels.long()
-    graph["note"].onset_div = torch.from_numpy(note_array['onset_div']).long()
-    graph["note"].duration_div = torch.from_numpy(note_array['duration_div']).long()
-    graph["note"].pitch = torch.from_numpy(note_array['pitch']).long()
+    graph["note"].onset_div = torch.from_numpy(note_array['onset_div'].copy()).long()
+    graph["note"].duration_div = torch.from_numpy(note_array['duration_div'].copy()).long()
+    graph["note"].pitch = torch.from_numpy(note_array['pitch'].copy()).long()
     for k, v in edge_etypes.items():
         graph['note', v, 'note'].edge_index = edges[:, edge_types == k]
 

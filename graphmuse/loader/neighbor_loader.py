@@ -156,6 +156,8 @@ class MuseNeighborLoader(DataLoader):
                 self.num_neighbors.get_mapped_values(data.edge_types),
                 self.node_time,
             )
+            if torch_geometric.typing.WITH_EDGE_TIME_NEIGHBOR_SAMPLE:
+                args += (self.edge_time,)
             # Setting to None
             seed_time = None
             args += (seed_time,)

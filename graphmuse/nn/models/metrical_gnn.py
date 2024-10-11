@@ -37,28 +37,28 @@ class HierarchicalHeteroGraphSage(torch.nn.Module):
                 neighbor_mask_edge):
 
         for i, conv in enumerate(self.convs[:-1]):
-            x_dict, edge_index_dict, _ = trim_to_layer(
-                layer=self.num_layers - i,
-                neighbor_mask_node=neighbor_mask_node,
-                neighbor_mask_edge=neighbor_mask_edge,
-                x=x_dict,
-                edge_index=edge_index_dict,
-            )
+            if not neighbor_mask_edge is None and not neighbor_mask_node is None:
+                x_dict, edge_index_dict, _ = trim_to_layer(
+                    layer=self.num_layers - i,
+                    neighbor_mask_node=neighbor_mask_node,
+                    neighbor_mask_edge=neighbor_mask_edge,
+                    x=x_dict,
+                    edge_index=edge_index_dict,
+                )
 
             x_dict = conv(x_dict, edge_index_dict)
             x_dict = {key: x.relu() for key, x in x_dict.items()}
             x_dict = {key: self.layer_norms[i](x) for key, x in x_dict.items()}
             x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
 
-        # Last layer
-        x_dict, edge_index_dict, _ = trim_to_layer(
-            layer=1,
-            neighbor_mask_node=neighbor_mask_node,
-            neighbor_mask_edge=neighbor_mask_edge,
-            x=x_dict,
-            edge_index=edge_index_dict,
-        )
-
+        if not neighbor_mask_edge is None and not neighbor_mask_node is None:
+            x_dict, edge_index_dict, _ = trim_to_layer(
+                layer=1,
+                neighbor_mask_node=neighbor_mask_node,
+                neighbor_mask_edge=neighbor_mask_edge,
+                x=x_dict,
+                edge_index=edge_index_dict,
+            )
         return x_dict
 
 
@@ -137,17 +137,18 @@ class FastHierarchicalHeteroGraphConv(torch.nn.Module):
             self.convs.append(conv)
             self.layer_norms.append(nn.LayerNorm(hidden_channels))
 
-    def forward(self, x_dict, edge_index_dict, neighbor_mask_node,
-                neighbor_mask_edge):
+    def forward(self, x_dict, edge_index_dict, neighbor_mask_node=None,
+                neighbor_mask_edge=None):
 
         for i, conv in enumerate(self.convs):
-            x_dict, edge_index_dict, _ = trim_to_layer_pyg(
-                layer=i,
-                num_sampled_edges_per_hop=neighbor_mask_edge,
-                num_sampled_nodes_per_hop=neighbor_mask_node,
-                x=x_dict,
-                edge_index=edge_index_dict,
-            )
+            if not neighbor_mask_edge is None and not neighbor_mask_node is None:
+                x_dict, edge_index_dict, _ = trim_to_layer_pyg(
+                    layer=i,
+                    num_sampled_edges_per_hop=neighbor_mask_edge,
+                    num_sampled_nodes_per_hop=neighbor_mask_node,
+                    x=x_dict,
+                    edge_index=edge_index_dict,
+                )
             x_dict = conv(x_dict, edge_index_dict)
             if i != len(self.convs) - 1:
                 x_dict = {key: x.relu() for key, x in x_dict.items()}
@@ -169,10 +170,14 @@ class GRUWrapper(nn.Module):
 class MetricalGNN(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers, metadata, dropout=0.5, fast=False):
         super(MetricalGNN, self).__init__()
+        self.num_layers = num_layers
+
         if fast:
             self.gnn = FastHierarchicalHeteroGraphConv(metadata[1], input_dim, hidden_dim, num_layers)
+            self.fhs = True
         else:
             self.gnn = HierarchicalHeteroGraphSage(metadata[1], input_dim, hidden_dim, num_layers)
+            self.fhs = False
         # encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=8)
         # self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=3, norm=nn.LayerNorm(hidden_dim),
         #                                                  enable_nested_tensor=False)
@@ -191,7 +196,7 @@ class MetricalGNN(nn.Module):
             nn.Linear(hidden_dim, output_dim)
         )
 
-    def forward(self, x_dict, edge_index_dict, neighbor_mask_node, neighbor_mask_edge):
+    def forward(self, x_dict, edge_index_dict, neighbor_mask_node=None, neighbor_mask_edge=None):
         x_dict = self.gnn(x_dict, edge_index_dict, neighbor_mask_node, neighbor_mask_edge)
         note = x_dict["note"]
         # Return the output
