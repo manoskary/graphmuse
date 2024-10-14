@@ -59,6 +59,7 @@ class HierarchicalHeteroGraphSage(torch.nn.Module):
                 x=x_dict,
                 edge_index=edge_index_dict,
             )
+        x_dict = self.convs[-1](x_dict, edge_index_dict)
         return x_dict
 
 
