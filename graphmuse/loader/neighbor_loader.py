@@ -46,7 +46,8 @@ class MuseNeighborLoader(DataLoader):
             filter_per_worker = infer_filter_per_worker(graphs)
         self.is_dataset = isinstance(graphs, InMemoryDataset)
         self.graphs = graphs
-        self.nlengths = np.array([graphs[i].num_nodes for i in range(len(graphs))]) if self.is_dataset else np.array([g.num_nodes for g in graphs])
+        input_type = "note"
+        self.nlengths = np.array([graphs[i][input_type].num_nodes for i in range(len(graphs))]) if self.is_dataset else np.array([g[input_type].num_nodes for g in graphs])
         self.metadata = graphs[0].metadata()
         self.num_neighbors = num_neighbors if num_neighbors is not None else {k: [0] for k in self.metadata[1]}
         self.subgraph_size = subgraph_size
@@ -67,7 +68,6 @@ class MuseNeighborLoader(DataLoader):
         kwargs.pop('dataset', None)
         kwargs.pop('collate_fn', None)
         self.batch_size = kwargs.pop('batch_size', 1)
-        input_type = "note"
         base_sampler = SubgraphMultiplicitySampler(self.nlengths, max_subgraph_size=subgraph_size, batch_size=self.batch_size,
                                                    multiplicity_ratio=subgraph_sample_ratio)
         # Remove batch_sampler from kwargs

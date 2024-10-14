@@ -11,10 +11,11 @@ from graphmuse.nn.models.metrical_gnn import MetricalGNN
 
 
 # Standardize the random seed
-np.random.seed(1)
-torch.manual_seed(1)
-torch.cuda.manual_seed(1)
-c_set_seed(1)
+seed = 2
+np.random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
+c_set_seed(seed)
 torch.backends.cudnn.deterministic = True
 
 
