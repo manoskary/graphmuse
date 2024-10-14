@@ -100,6 +100,11 @@ python setup.py install
 
 ## Usage
 
+The GraphMuse processing pipeline:
+<p align="center">
+   <img src="assets/graphmuse_pipeline.png" height="150">
+</p>
+
 ### Graph Convolution
 
 GraphMuse includes a variety of graph convolutional layers for music graphs.
@@ -153,6 +158,12 @@ score_graph = gm.create_score_graph(feature_array, note_array)
 print(score_graph)
 ```
 
+A score graph is a PyTorch Geometric HeteroData object that follows the following conceptual structure:
+
+<p align="center">
+   <img src="assets/satie_graph.png" height="200">
+</p>
+
 ### Sampling and Batching
 
 GraphMuse includes a dataloader for sampling and batching music graphs together.
@@ -197,6 +208,12 @@ dataloader = MuseNeighborLoader(graphs, subgraph_size=subgraph_size, batch_size=
 for batch in dataloader:
     print(batch)
 ```
+
+The conceptual structure of sampling from each score graph is shown below:
+
+<p align="center">
+   <img src="assets/sampling_graphmuse.png" height="400">
+</p>
 
 
 ## Citing GraphMuse
