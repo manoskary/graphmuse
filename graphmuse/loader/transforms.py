@@ -10,7 +10,7 @@ def transform_to_pyg(data: Batch, num_hops: int) -> Batch:
     for k in data.node_types:
         data[k].x = data[k].x[remap[k]]
         shape_ckecker = data[k].x.shape[0]
-        data[k].num_sampled_nodes = torch.bincount(data[k].neighbor_mask)
+        data[k].num_sampled_nodes = torch.bincount(data[k].neighbor_mask, minlength=num_hops + 1)
         start = 0
         edge_remap[k] = torch.empty(data[k].num_sampled_nodes.sum(), dtype=torch.long)
         for i, v in enumerate(data[k].num_sampled_nodes):
@@ -37,7 +37,7 @@ def transform_to_pyg(data: Batch, num_hops: int) -> Batch:
         data[k].edge_index = edge_index[:, torch.cat(
             [torch.where(data[k].neighbor_mask == i)[0] for i in range(num_hops)], dim=0)]
         shape_ckecker = data[k].edge_index.shape[1]
-        data[k].num_sampled_edges = torch.bincount(data[k].neighbor_mask)
+        data[k].num_sampled_edges = torch.bincount(data[k].neighbor_mask, minlength=num_hops)
         data[k].pop("neighbor_mask")
         for attribute in data[k].keys():
             # if the attribute size is the same as the number of nodes, we can remap it
