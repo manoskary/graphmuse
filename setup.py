@@ -43,7 +43,7 @@ long_description = open(os.path.join(os.path.dirname(__file__), 'README.md'), "r
 
 setuptools.setup(
     name='graphmuse',
-    version='0.0.3',
+    version='0.0.4',
     description='GraphMuse is a Python Library for Graph Deep Learning on Symbolic Music.',
     long_description=long_description,
     long_description_content_type='text/markdown',
