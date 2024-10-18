@@ -7,7 +7,7 @@
 [![Unittest Status](https://github.com/manoskary/graphmuse/workflows/Tests/badge.svg)](https://github.com/manoskary/graphmuse/actions?query=workflow%3ATests)
 
 <p align="center">
-   <img src="graphmuse/assets/graphmuse.png" height="300">
+   <img src="https://raw.githubusercontent.com/manoskary/graphmuse/main/graphmuse/assets/graphmuse.png" height="300">
 </p>
 
 
@@ -102,7 +102,7 @@ python setup.py install
 
 The GraphMuse processing pipeline:
 <p align="center">
-   <img src="assets/graphmuse_pipeline.png" height="150">
+   <img src="https://raw.githubusercontent.com/manoskary/graphmuse/main/assets/graphmuse_pipeline.png" height="150">
 </p>
 
 ### Graph Convolution
@@ -161,7 +161,7 @@ print(score_graph)
 A score graph is a PyTorch Geometric HeteroData object that follows the following conceptual structure:
 
 <p align="center">
-   <img src="assets/satie_graph.png" height="200">
+   <img src="https://raw.githubusercontent.com/manoskary/graphmuse/main/assets/satie_graph.png" height="200">
 </p>
 
 ### Sampling and Batching
@@ -212,7 +212,7 @@ for batch in dataloader:
 The conceptual structure of sampling from each score graph is shown below:
 
 <p align="center">
-   <img src="assets/sampling_graphmuse.png" height="400">
+   <img src="https://raw.githubusercontent.com/manoskary/graphmuse/main/assets/sampling_graphmuse.png" height="400">
 </p>
 
 
