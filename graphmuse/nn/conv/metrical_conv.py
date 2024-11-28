@@ -6,29 +6,77 @@ from torch_geometric.nn import SAGEConv
 
 
 class MetricalConvLayer(nn.Module):
-    def __init__(self, in_dim, out_dim, activation=None, dropout=0.2, bias=True):
+    """
+    Metrical Convolutional Layer implementation.
+
+    Parameters
+    ----------
+    input_channels : int
+        Number of input channels.
+    output_channels : int
+        Number of output channels.
+    activation : callable, optional
+        Activation function, by default None.
+    dropout : float, optional
+        Dropout rate, by default 0.2.
+    bias : bool, optional
+        Whether to include a bias term, by default True.
+
+    Examples
+    --------
+    >>> mcl = MetricalConvLayer(input_channels=16, output_channels=8, activation=torch.nn.ReLU(), dropout=0.5)
+    >>> x_metrical = torch.randn(10, 16)
+    >>> x = torch.randn(10, 16)
+    >>> edge_index = torch.randint(0, 10, (2, 20))
+    >>> batch = torch.randint(0, 2, (10,))
+    >>> out = mcl(x_metrical, x, edge_index, batch)
+    >>> print(out.shape)
+    torch.Size([10, 8])
+    """
+    def __init__(self, input_channels, output_channels, activation=None, dropout=0.2, bias=True):
         super().__init__()
-        self.input_dim = in_dim
-        self.output_dim = out_dim
+        self.input_channels = input_channels
+        self.output_channels = output_channels
         self.activation = nn.Identity() if activation is None else activation
         self.dropout = nn.Dropout(dropout)
-        self.normalize = nn.BatchNorm1d(out_dim)
-        self.neigh = nn.Linear(in_dim, in_dim, bias=bias)
-        self.conv_out = nn.Linear(3 * in_dim, out_dim, bias=bias)
-        self.seq = SAGEConv(in_dim, in_dim, aggr='add')
+        self.normalize = nn.BatchNorm1d(output_channels)
+        self.neigh = nn.Linear(input_channels, input_channels, bias=bias)
+        self.conv_out = nn.Linear(3 * input_channels, output_channels, bias=bias)
+        self.seq = SAGEConv(input_channels, input_channels, aggr='add')
 
     def reset_parameters(self):
+        """
+        Reset the parameters of the MetricalConvLayer.
+        """
         self.neigh.reset_parameters()
         self.conv_out.reset_parameters()
         self.seq.reset_parameters()
 
     def forward(self, x_metrical, x, edge_index, batch):
+        """
+        Forward pass for the Metrical Convolutional Layer.
+
+        Parameters
+        ----------
+        x_metrical : torch.Tensor
+            Input metrical node features.
+        x : torch.Tensor
+            Input node features.
+        edge_index : torch.Tensor
+            Edge indices.
+        batch : torch.Tensor
+            Batch indices.
+
+        Returns
+        -------
+        torch.Tensor
+            Output node features.
+        """
         if batch is None or torch.all(batch == batch[0]):
             seq_index = torch.vstack((torch.arange(0, x_metrical.size(0) - 1), torch.arange(1, x_metrical.size(0)))).long()
         else:
             seq_index = []
             lengths = torch.unique(batch, return_counts=True)[1]
-            # add zero to the beginning of lengths
             lengths = torch.cat((torch.zeros(1, dtype=torch.long), lengths))
             lengths_cummulative = torch.cumsum(lengths, dim=0)
             for i in range(len(lengths) - 1):

@@ -50,12 +50,12 @@ class CentroidDistance(nn.Module):
     Implement a model that calculates the pairwise distances between node representations
     and centroids
     """
-    def __init__(self, in_feats, out_feats):
+    def __init__(self, input_channels, output_channels):
         super(CentroidDistance, self).__init__()
         # centroid embedding
-        self.in_feats = in_feats
-        self.out_feats = out_feats
-        self.centroid_embedding = nn.Embedding(in_feats, out_feats,
+        self.input_channels = input_channels
+        self.output_channels = output_channels
+        self.centroid_embedding = nn.Embedding(input_channels, output_channels,
             sparse=False,
             scale_grad_by_freq=False)
         self.init_embed()
@@ -76,14 +76,14 @@ class CentroidDistance(nn.Module):
         node_num = node_repr.size(0)
 
         # broadcast and reshape node_repr to [node_num * num_centroid, embed_size]
-        node_repr = node_repr.unsqueeze(1).expand(-1, self.in_feats, -1).contiguous().view(-1, self.out_feats)
+        node_repr = node_repr.unsqueeze(1).expand(-1, self.input_channels, -1).contiguous().view(-1, self.output_channels)
 
         # broadcast and reshape centroid embeddings to [node_num * num_centroid, embed_size]
-        centroid_repr = self.centroid_embedding(torch.arange(self.in_feats).cuda())
-        centroid_repr = centroid_repr.unsqueeze(0).expand(node_num, -1,-1).contiguous().view(-1, self.out_feats)
+        centroid_repr = self.centroid_embedding(torch.arange(self.input_channels).cuda())
+        centroid_repr = centroid_repr.unsqueeze(0).expand(node_num, -1,-1).contiguous().view(-1, self.output_channels)
         # get distance
         node_centroid_dist = self.manifold.distance(node_repr, centroid_repr)
-        node_centroid_dist = node_centroid_dist.view(1, node_num, self.out_feats) * mask
+        node_centroid_dist = node_centroid_dist.view(1, node_num, self.output_channels) * mask
         # average pooling over nodes
         graph_centroid_dist = torch.sum(node_centroid_dist, dim=1) / torch.sum(mask)
         return graph_centroid_dist, node_centroid_dist
@@ -145,17 +145,17 @@ class RiemannianSGD(torch.optim.optimizer.Optimizer):
 
 
 class HyperbolicSageConv(nn.Module):
-    def __init__(self, in_feats, out_feats, bias=True):
+    def __init__(self, input_channels, output_channels, bias=True):
         super(HyperbolicSageConv, self).__init__()
         self.bias = bias
-        self.embed = torch.zeros((in_feats, in_feats), requires_grad=True)
-        self.layer = torch.zeros((2*in_feats, out_feats), requires_grad=True)
+        self.embed = torch.zeros((input_channels, input_channels), requires_grad=True)
+        self.layer = torch.zeros((2*input_channels, output_channels), requires_grad=True)
         self.reset_parameters()
         self.embed = nn.Parameter(self.embed)
         self.layer = nn.Parameter(self.layer)
         if self.bias:
-            self.embed_bias = torch.zeros((in_feats, 1), requires_grad=True)
-            self.layer_bias = torch.zeros((out_feats, 1), requires_grad=True)
+            self.embed_bias = torch.zeros((input_channels, 1), requires_grad=True)
+            self.layer_bias = torch.zeros((output_channels, 1), requires_grad=True)
 
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.embed, gain=nn.init.calculate_gain('relu'))
@@ -176,18 +176,60 @@ class HyperbolicSageConv(nn.Module):
 
 
 class HGNN(nn.Module):
-    def __init__(self, in_feats, n_hidden, out_feats, n_layers, activation=F.relu, dropout=0.5):
+    """
+    Hyperbolic Graph Neural Network (HGNN) implementation.
+
+    Parameters
+    ----------
+    input_channels : int
+        Number of input channels.
+    hidden_channels : int
+        Number of hidden channels.
+    output_channels : int
+        Number of output channels.
+    num_layers : int
+        Number of layers in the HGNN.
+    activation : callable, optional
+        Activation function, by default F.relu.
+    dropout : float, optional
+        Dropout rate, by default 0.5.
+
+    Examples
+    --------
+    >>> hgnn = HGNN(input_channels=16, hidden_channels=32, output_channels=8, num_layers=3)
+    >>> x = torch.randn(10, 16)
+    >>> adj = torch.randint(0, 2, (10, 10))
+    >>> out = hgnn(x, adj)
+    >>> print(out.shape)
+    torch.Size([10, 8])
+    """
+    def __init__(self, input_channels, hidden_channels, output_channels, num_layers, activation=F.relu, dropout=0.5):
         super(HGNN, self).__init__()
         self.init_layer = exp_map_zero
         self.activation = activation
         self.dropout = nn.Dropout(dropout)
         self.layers = nn.ModuleList()
-        self.layers.append(HyperbolicSageConv(in_feats, n_hidden))
-        for i in range(n_layers - 1):
-            self.layers.append(HyperbolicSageConv(n_hidden, n_hidden))
-        self.layers.append(HyperbolicSageConv(n_hidden, out_feats))
+        self.layers.append(HyperbolicSageConv(input_channels, hidden_channels))
+        for i in range(num_layers - 1):
+            self.layers.append(HyperbolicSageConv(hidden_channels, hidden_channels))
+        self.layers.append(HyperbolicSageConv(hidden_channels, output_channels))
 
     def forward(self, x, adj):
+        """
+        Forward pass for the Hyperbolic Graph Neural Network (HGNN).
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input node features.
+        adj : torch.Tensor
+            Adjacency matrix.
+
+        Returns
+        -------
+        torch.Tensor
+            Output node features.
+        """
         # 0-projection to Poincare Hyperbolic space.
         h = self.init_layer(x)
         for i, layer in enumerate(self.layers):
@@ -198,11 +240,38 @@ class HGNN(nn.Module):
         return h
 
 class HGNN_NODE(nn.Module):
-    def __init__(self, in_feats, n_hidden, out_feats, n_layers, activation=F.relu, dropout=0.5):
-        self.input_embedding  = nn.Linear(in_feats, n_hidden)
-        self.hgnn = HGNN(n_hidden, n_hidden, n_hidden, n_layers, activation, dropout)
-        self.distance = CentroidDistance(n_hidden, n_hidden)
-        self.output_linear = nn.Linear(n_hidden, n_hidden)
+    """
+    HGNN_NODE is a node classification model using Hyperbolic Graph Neural Network (HGNN).
+
+    Parameters
+    ----------
+    input_channels : int
+        Number of input channels.
+    hidden_channels : int
+        Number of hidden channels.
+    output_channels : int
+        Number of output channels.
+    num_layers : int
+        Number of layers in the HGNN.
+    activation : callable, optional
+        Activation function, by default F.relu.
+    dropout : float, optional
+        Dropout rate, by default 0.5.
+
+    Examples
+    --------
+    >>> hgnn_node = HGNN_NODE(input_channels=16, hidden_channels=32, output_channels=8, num_layers=3)
+    >>> adj = torch.randint(0, 2, (10, 10))
+    >>> features = torch.randn(10, 16)
+    >>> out = hgnn_node(adj, features)
+    >>> print(out.shape)
+    torch.Size([10, 8])
+    """
+    def __init__(self, input_channels, hidden_channels, output_channels, num_layers, activation=F.relu, dropout=0.5):
+        self.input_embedding  = nn.Linear(input_channels, hidden_channels)
+        self.hgnn = HGNN(hidden_channels, hidden_channels, hidden_channels, num_layers, activation, dropout)
+        self.distance = CentroidDistance(hidden_channels, hidden_channels)
+        self.output_linear = nn.Linear(hidden_channels, hidden_channels)
         self.log_softmax = nn.LogSoftmax(dim=1)
         self.reset_parameters()
 
@@ -213,12 +282,20 @@ class HGNN_NODE(nn.Module):
 
     def forward(self, adj, features):
         """
-        Args:
-            adj: the neighbor ids of each node [1, node_num, max_neighbor]
-            weight: the weight of each neighbor [1, node_num, max_neighbor]
-            features: [1, node_num, input_dim]
-        """
+        Forward pass for the HGNN_NODE model.
 
+        Parameters
+        ----------
+        adj : torch.Tensor
+            Adjacency matrix.
+        features : torch.Tensor
+            Input node features.
+
+        Returns
+        -------
+        torch.Tensor
+            Output node features.
+        """
         node_repr = self.activation(self.input_embedding(features))
         mask = torch.ones((features.shape[0], 1)).cuda()  # [node_num, 1]
         node_repr = self.hgnn(node_repr, adj)  # [node_num, embed_size]

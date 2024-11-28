@@ -32,24 +32,62 @@ else:
     from torch.jit import _overload_method as overload
 
 
-# TODO check for correctness
 class GraphAttentionLayer(nn.Module):
-    """GAT implementation."""
-    def __init__(self, in_dim, out_dim, dropout, alpha, concat=True):
+    """
+    Graph Attention Layer (GAT) implementation.
+
+    Parameters
+    ----------
+    input_channels : int
+        Number of input channels.
+    output_channels : int
+        Number of output channels.
+    dropout : float
+        Dropout rate.
+    alpha : float
+        Negative slope for LeakyReLU.
+    concat : bool, optional
+        Whether to concatenate the output of multiple heads, by default True.
+
+    Examples
+    --------
+    >>> gat_layer = GraphAttentionLayer(input_channels=16, output_channels=8, dropout=0.5, alpha=0.2)
+    >>> h = torch.randn(10, 16)
+    >>> adj = torch.randint(0, 2, (10, 10))
+    >>> out = gat_layer(h, adj)
+    >>> print(out.shape)
+    torch.Size([10, 8])
+    """
+    def __init__(self, input_channels, output_channels, dropout, alpha, concat=True):
         super(GraphAttentionLayer, self).__init__()
-        self.in_dim = in_dim
-        self.out_dim = out_dim
+        self.input_channels = input_channels
+        self.output_channels = output_channels
         self.dropout = dropout
         self.alpha = alpha
         self.concat = concat
 
-        self.W = nn.Parameter(torch.zeros(size=(in_dim, out_dim)))
+        self.W = nn.Parameter(torch.zeros(size=(input_channels, output_channels)))
         nn.init.xavier_uniform_(self.W.data, gain=1.414)
-        self.a = nn.Parameter(torch.zeros(size=(2*out_dim, 1)))
+        self.a = nn.Parameter(torch.zeros(size=(2*output_channels, 1)))
         nn.init.xavier_uniform_(self.a.data, gain=1.414)
         self.leakyrelu = nn.LeakyReLU(self.alpha)
 
     def forward(self, h, adj):
+        """
+        Forward pass for the Graph Attention Layer.
+
+        Parameters
+        ----------
+        h : torch.Tensor
+            Input node features.
+        adj : torch.Tensor
+            Adjacency matrix.
+
+        Returns
+        -------
+        torch.Tensor
+            Output node features.
+        """
         Wh = torch.mm(h, self.W)
         a_input = self._prepare_attentional_mechanism_input(Wh)
         e = self.leakyrelu(torch.matmul(a_input, self.a).squeeze(2))
@@ -67,19 +105,19 @@ class GraphAttentionLayer(nn.Module):
 
 
 class GATConvLayer(nn.Module):
-    def __init__(self, in_features, out_features, num_heads=3, bias=True, dropout=0.3, negative_slope=0.2, in_edge_features=None):
+    def __init__(self, input_channels, output_channels, num_heads=3, bias=True, dropout=0.3, negative_slope=0.2, in_edge_features=None):
         super(GATConvLayer, self).__init__()
         self.num_heads = num_heads
-        self.in_features = in_features
-        self.out_features = out_features
-        self.linear = nn.Linear(in_features, out_features, bias=bias)
-        self.el = nn.Linear(in_features, in_features * num_heads, bias=bias)
-        self.er = nn.Linear(in_features, in_features * num_heads, bias=bias)
-        self.attnl = nn.Parameter(torch.FloatTensor(1, num_heads, in_features))
-        self.attnr = nn.Parameter(torch.FloatTensor(1, num_heads, in_features))
+        self.input_channels = input_channels
+        self.output_channels = output_channels
+        self.linear = nn.Linear(input_channels, output_channels, bias=bias)
+        self.el = nn.Linear(input_channels, input_channels * num_heads, bias=bias)
+        self.er = nn.Linear(input_channels, input_channels * num_heads, bias=bias)
+        self.attnl = nn.Parameter(torch.FloatTensor(1, num_heads, input_channels))
+        self.attnr = nn.Parameter(torch.FloatTensor(1, num_heads, input_channels))
         if in_edge_features is not None:
-            self.attne = nn.Parameter(torch.FloatTensor(1, num_heads, in_features))
-            self.fc_fij = nn.Linear(in_edge_features, in_features * num_heads, bias=bias)
+            self.attne = nn.Parameter(torch.FloatTensor(1, num_heads, input_channels))
+            self.fc_fij = nn.Linear(in_edge_features, input_channels * num_heads, bias=bias)
         self.in_edge_feats = in_edge_features
         self.leaky_relu = nn.LeakyReLU(negative_slope)
         self.softmax = nn.Softmax(dim=1)
@@ -104,24 +142,6 @@ class GATConvLayer(nn.Module):
             if self.fc_fij.bias is not None:
                 nn.init.constant_(self.fc_fij.bias, 0.)
 
-    # def forward(self, features, edge_index, edge_features=None):
-    #     prefix_shape = features.shape[:-1]
-    #     fc_src = self.el(features).view(*prefix_shape, self.num_heads, self.in_features)
-    #     fc_dst = self.er(features).view(*prefix_shape, self.num_heads, self.in_features)
-    #     el = (fc_src[edge_index[0]] * self.attnl).sum(dim=-1).unsqueeze(-1)
-    #     er = (fc_dst[edge_index[1]] * self.attnr).sum(dim=-1).unsqueeze(-1)
-    #     if edge_features is not None and self.in_edge_feats is not None:
-    #         edge_shape = edge_features.shape[:-1]
-    #         fc_eij = self.fc_fij(edge_features).view(*edge_shape, self.num_heads, self.in_features)
-    #         ee = (fc_eij * self.attne).sum(dim=-1).unsqueeze(-1)
-    #         e = self.leaky_relu(el + er + ee)
-    #     else:
-    #         e = self.leaky_relu(el + er)
-    #     # Not Quite the same as the Softmax in the paper.
-    #     a = self.softmax(self.attndrop(e)).mean(dim=1)
-    #     h = self.linear(features)
-    #     out = scatter(a * h[edge_index[1]], edge_index[0], 0, out=h.clone(), reduce='add')
-    #     return out
 
 class CustomGATConv(MessagePassing):
     r"""The graph attentional operator from the `"Graph Attention Networks"
@@ -161,7 +181,7 @@ class CustomGATConv(MessagePassing):
         {\sum_{k \in \mathcal{N}(i) \cup \{ i \}}
         \exp\left(\mathrm{LeakyReLU}\left(
         \mathbf{a}^{\top}_{s} \mathbf{\Theta}_{s}\mathbf{x}_i
-        + \mathbf{a}^{\top}_{t} \mathbf{\Theta}_{t}\mathbf{x}_k
+        + \mathbf{a}^{\top}_{t}\mathbf{\Theta}_{t}\mathbf{x}_k
         + \mathbf{a}^{\top}_{e} \mathbf{\Theta}_{e} \mathbf{e}_{i,k}
         \right)\right)}.
 
