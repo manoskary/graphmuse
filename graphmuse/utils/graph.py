@@ -206,7 +206,7 @@ def add_measure_nodes(measures, note_array):
 
 def add_beat_nodes(note_array):
     """
-    Add virtual nodes for every beat.
+    Add virtual nodes for every measure.
 
     Parameters
     ----------

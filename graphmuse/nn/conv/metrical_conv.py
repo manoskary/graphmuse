@@ -77,6 +77,7 @@ class MetricalConvLayer(nn.Module):
         else:
             seq_index = []
             lengths = torch.unique(batch, return_counts=True)[1]
+            # add zero to the beginning of lengths
             lengths = torch.cat((torch.zeros(1, dtype=torch.long), lengths))
             lengths_cummulative = torch.cumsum(lengths, dim=0)
             for i in range(len(lengths) - 1):
