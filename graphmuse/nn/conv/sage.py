@@ -3,13 +3,37 @@ import torch
 
 
 class SageConvLayer(nn.Module):
-    def __init__(self, in_features, out_features, bias=False):
+    """
+    GraphSAGE Convolutional Layer.
+
+    Parameters
+    ----------
+    input_channels : int
+        Number of input channels.
+    output_channels : int
+        Number of output channels.
+    bias : bool, optional
+        Whether to include a bias term, by default False.
+
+    Examples
+    --------
+    >>> layer = SageConvLayer(input_channels=16, output_channels=32)
+    >>> features = torch.randn(10, 16)
+    >>> adj = torch.randint(0, 2, (10, 10))
+    >>> output = layer.forward_adj(features, adj)
+    >>> print(output.shape)
+    torch.Size([10, 32])
+    """
+    def __init__(self, input_channels, output_channels, bias=False):
         super(SageConvLayer, self).__init__()
-        self.neigh_linear = nn.Linear(in_features, in_features, bias=bias)
-        self.linear = nn.Linear(in_features * 2, out_features, bias=bias)
+        self.neigh_linear = nn.Linear(input_channels, input_channels, bias=bias)
+        self.linear = nn.Linear(input_channels * 2, output_channels, bias=bias)
         self.reset_parameters()
 
     def reset_parameters(self):
+        """
+        Reset the parameters of the SageConvLayer.
+        """
         gain = nn.init.calculate_gain('relu')
         nn.init.xavier_uniform_(self.linear.weight, gain=gain)
         nn.init.xavier_uniform_(self.neigh_linear.weight, gain=gain)
@@ -20,7 +44,7 @@ class SageConvLayer(nn.Module):
 
     def forward_adj(self, features, adj, neigh_feats=None):
         """
-        This is the forward pass for the rectangle version of adjacency.
+        Forward pass for the SageConvLayer using adjacency matrix.
 
         Parameters
         ----------
@@ -28,6 +52,13 @@ class SageConvLayer(nn.Module):
             The node features.
         adj : torch.LongTensor
             The edge indices size (N Neighbors, M Target).
+        neigh_feats : torch.Tensor, optional
+            The neighbor features, by default None.
+
+        Returns
+        -------
+        torch.Tensor
+            The output features.
         """
         if neigh_feats is None:
             neigh_feats = features

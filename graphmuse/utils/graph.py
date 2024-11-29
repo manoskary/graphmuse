@@ -9,6 +9,25 @@ from typing import Optional, Union, Tuple, List, Dict, Any
 
 
 def graph_to_pyg(x, edge_index, edge_attributes=None, note_array=None):
+    """
+    Convert graph data to PyTorch Geometric HeteroData format.
+
+    Parameters
+    ----------
+    x : np.ndarray or torch.Tensor
+        Node features.
+    edge_index : np.ndarray
+        Edge indices.
+    edge_attributes : np.ndarray, optional
+        Edge attributes, by default None.
+    note_array : np.ndarray, optional
+        Note array, by default None.
+
+    Returns
+    -------
+    HeteroData
+        PyTorch Geometric HeteroData object.
+    """
     edge_type_map = {"onset": 0, "consecutive": 1, "during": 2, "rest": 3}
     data = HeteroData()
     data["note"].x = torch.from_numpy(x) if isinstance(x, np.ndarray) else x
@@ -25,7 +44,8 @@ def graph_to_pyg(x, edge_index, edge_attributes=None, note_array=None):
 
 
 def edges_from_note_array(note_array):
-    '''Turn note_array to list of edges.
+    """
+    Turn note_array to list of edges.
 
     Parameters
     ----------
@@ -34,10 +54,9 @@ def edges_from_note_array(note_array):
 
     Returns
     -------
-    edg_src : np.array
+    np.ndarray
         The edges in the shape of (2, num_edges).
-    '''
-
+    """
     edg_src = list()
     edg_dst = list()
     start_rest_index = len(note_array)
@@ -80,6 +99,11 @@ def add_reverse_edges(graph, mode):
         The graph object.
     mode : str
         The mode of adding reverse edges. Either 'new_type' or 'undirected'.
+
+    Returns
+    -------
+    HeteroData
+        The graph with added reverse edges.
     """
     if mode == "new_type":
         # add reversed consecutive edges
@@ -102,6 +126,23 @@ def add_reverse_edges(graph, mode):
 
 
 def add_reverse_edges_from_edge_index(edge_index, edge_type, mode="new_type"):
+    """
+    Add reverse edges to the edge index.
+
+    Parameters
+    ----------
+    edge_index : torch.Tensor
+        Edge indices.
+    edge_type : torch.Tensor
+        Edge types.
+    mode : str, optional
+        The mode of adding reverse edges, by default "new_type".
+
+    Returns
+    -------
+    Tuple[torch.Tensor, torch.Tensor]
+        Updated edge indices and edge types.
+    """
     if mode == "new_type":
         unique_edge_types = torch.unique(edge_type)
         for type in unique_edge_types:
@@ -116,7 +157,21 @@ def add_reverse_edges_from_edge_index(edge_index, edge_type, mode="new_type"):
 
 
 def add_measure_nodes(measures, note_array):
-    """Add virtual nodes for every measure"""
+    """
+    Add virtual nodes for every measure.
+
+    Parameters
+    ----------
+    measures : np.ndarray or list
+        Measures data.
+    note_array : np.ndarray
+        Note array.
+
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray, int]
+        Measure cluster, measure edges, and number of measures.
+    """
     assert "onset_div" in note_array.dtype.names, "Note array must have 'onset_div' field to add measure nodes."
     if not isinstance(measures, np.ndarray):
         measures = np.array([[m.start.t, m.end.t] for m in measures])
@@ -148,9 +203,22 @@ def add_measure_nodes(measures, note_array):
 
     return measure_cluster, measure_edges, num_measures
 
+
 def add_beat_nodes(note_array):
-    """Add virtual nodes for every beat"""
-    assert "onset_beat" in note_array.dtype.names, "Note array must have 'onset_beat' field to add measure nodes."
+    """
+    Add virtual nodes for every measure.
+
+    Parameters
+    ----------
+    note_array : np.ndarray
+        Note array.
+
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray, np.ndarray]
+        Beat cluster, beat index, and beat edges.
+    """
+    assert "onset_beat" in note_array.dtype.names, "Note array must have 'onset_beat' field to add beat nodes."
     # when the onset_beat has negative values, we need to shift all the values to be positive
     onset_beat = note_array["onset_beat"]
     # beat_edges, beat_index, beat_cluster = csamplers.compute_beat_edges(onset_beat)
@@ -190,7 +258,8 @@ def create_score_graph(
         add_reverse: bool= True,
         measures: Optional[List[spt.Measure]] = None,
         add_beats: bool = False) -> HeteroData:
-    """Create a score graph from note array.
+    """
+    Create a score graph from note array.
 
     Parameters
     ----------
@@ -212,7 +281,7 @@ def create_score_graph(
 
     Returns
     -------
-    graph : HeteroData
+    HeteroData
         The score graph.
     """
     if sort:
