@@ -25,6 +25,46 @@ class MuseNeighborLoader(DataLoader):
     Dataloader for MuseData objects. It samples a random region of a given budget from the graph.
     If the budget is larger than the number of nodes, it returns all nodes.
     If the graph is heterogeneous, it samples from the given node type.
+
+    Parameters
+    ----------
+    graphs : Union[List[Union[Data, HeteroData, Tuple[FeatureStore, GraphStore]]], InMemoryDataset]
+        The list of graphs or an InMemoryDataset.
+    num_neighbors : Union[List[int], Dict[EdgeType, List[int]]]
+        The number of neighbors to sample for each node type.
+    subgraph_size : int, optional
+        The size of the subgraph to sample, by default 100.
+    subgraph_sample_ratio : float, optional
+        The ratio of subgraph samples to the total number of nodes, by default 2.
+    transform : Optional[Callable], optional
+        A function/transform that takes in a sampled subgraph and returns a transformed version, by default None.
+    transform_sampler_output : Optional[Callable], optional
+        A function/transform that takes in the output of the sampler and returns a transformed version, by default None.
+    filter_per_worker : Optional[bool], optional
+        Whether to filter the data per worker, by default None.
+    custom_cls : Optional[HeteroData], optional
+        A custom HeteroData class, by default None.
+    device : Union[str, torch.device], optional
+        The device to use, by default "cpu".
+    is_sorted : bool, optional
+        Whether the data is sorted, by default False.
+    share_memory : bool, optional
+        Whether to share memory, by default False.
+    order_batch : bool, optional
+        Whether to order the batch, by default True.
+    **kwargs
+        Additional arguments for the DataLoader.
+
+    Examples
+    --------
+    >>> from graphmuse.loader.neighbor_loader import MuseNeighborLoader
+    >>> from torch_geometric.data import HeteroData
+    >>> data = HeteroData()
+    >>> data['note'].x = torch.randn(100, 16)
+    >>> data['note', 'consecutive', 'note'].edge_index = torch.randint(0, 100, (2, 500))
+    >>> loader = MuseNeighborLoader([data], num_neighbors=[10, 5], subgraph_size=50)
+    >>> for batch in loader:
+    >>>     print(batch)
     """
     def __init__(
             self,
@@ -105,6 +145,21 @@ class MuseNeighborLoader(DataLoader):
         return batch_out
 
     def sample_from_each_graph(self, data):
+        """
+        Samples a subgraph from each graph in the data batch.
+
+        Parameters
+        ----------
+        data : HeteroData
+            The input graph data.
+
+        Returns
+        -------
+        data_out : HeteroData
+            The sampled subgraph.
+        target_nodes : int
+            The number of target nodes in the sampled subgraph.
+        """
         # If the graph is already smaller than the subgraph size, return the whole graph
         if data["note"].num_nodes <= self.subgraph_size:
             # target_lenghts = {k: data[k].x.shape[0] for k in data.node_types}
@@ -145,6 +200,39 @@ class MuseNeighborLoader(DataLoader):
         return data_out, len(target_nodes["note"])
 
     def sample_hetero_graph(self, data, target_nodes, colptr_dict, row_dict, to_edge_type):
+        """
+        Samples a heterogeneous graph.
+
+        Parameters
+        ----------
+        data : HeteroData
+            The input graph data.
+        target_nodes : Dict[str, Tensor]
+            The target nodes to sample.
+        colptr_dict : Dict[str, Tensor]
+            The column pointers for the CSC format.
+        row_dict : Dict[str, Tensor]
+            The row indices for the CSC format.
+        to_edge_type : Dict[str, Tuple[str, str, str]]
+            The mapping from edge type to edge tuple.
+
+        Returns
+        -------
+        node : Dict[str, Tensor]
+            The sampled nodes.
+        row : Dict[str, Tensor]
+            The row indices of the sampled edges.
+        col : Dict[str, Tensor]
+            The column indices of the sampled edges.
+        edge : Dict[str, Tensor]
+            The sampled edges.
+        batch : Optional[Dict[str, Tensor]]
+            The batch indices of the sampled nodes.
+        num_sampled_nodes : Optional[Dict[str, List[int]]]
+            The number of sampled nodes per hop.
+        num_sampled_edges : Optional[Dict[str, List[int]]]
+            The number of sampled edges per hop.
+        """
         # Sample subgraph:
         if WITH_PYG_LIB:
             args = (
@@ -210,6 +298,16 @@ class MuseNeighborLoader(DataLoader):
             self._num_neighbors = NumNeighbors(num_neighbors)
 
     def set_neighbor_mask_node(self, data, num_sampled_nodes):
+        """
+        Sets the neighbor mask for nodes.
+
+        Parameters
+        ----------
+        data : HeteroData
+            The input graph data.
+        num_sampled_nodes : Dict[str, List[int]]
+            The number of sampled nodes per hop.
+        """
         for key, value in num_sampled_nodes.items():
             neighbor_mask = torch.zeros(data[key].x.shape[0], dtype=torch.long, device=data[key].x.device)
             value = np.cumsum(value)
@@ -219,6 +317,16 @@ class MuseNeighborLoader(DataLoader):
             data[key].neighbor_mask = neighbor_mask
 
     def set_neighbor_mask_edge(self, data, num_sampled_edges):
+        """
+        Sets the neighbor mask for edges.
+
+        Parameters
+        ----------
+        data : HeteroData
+            The input graph data.
+        num_sampled_edges : Dict[str, List[int]]
+            The number of sampled edges per hop.
+        """
         for key, value in num_sampled_edges.items():
             key = tuple(key.split("__")) if isinstance(key, str) else key
             neighbor_mask = torch.zeros(data[key].edge_index.shape[1], dtype=torch.long, device=data[key].edge_index.device)

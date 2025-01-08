@@ -9,18 +9,58 @@ from torch_geometric.nn import SAGEConv, GraphConv
 from collections import namedtuple
 
 class Encoder(nn.Module):
-    def __init__(self, in_feats, n_hidden, n_layers, activation=F.relu, dropout=0.1):
+    def __init__(self, input_channels, n_hidden, n_layers, activation=F.relu, dropout=0.1):
+        """
+        Encoder for the HGVAE model.
+
+        Parameters
+        ----------
+        input_channels : int
+            Number of input channels.
+        n_hidden : int
+            Number of hidden channels.
+        n_layers : int
+            Number of layers.
+        activation : callable, optional
+            Activation function, by default F.relu.
+        dropout : float, optional
+            Dropout rate, by default 0.1.
+
+        Examples
+        --------
+        >>> encoder = Encoder(input_channels=16, n_hidden=32, n_layers=3)
+        >>> edge_index = torch.randint(0, 10, (2, 20))
+        >>> inputs = torch.randn(10, 16)
+        >>> out = encoder(edge_index, inputs)
+        >>> print(out.shape)
+        torch.Size([10, 32])
+        """
         super(Encoder, self).__init__()
-        self.in_feats = in_feats
+        self.input_channels = input_channels
         self.n_hidden = n_hidden
         self.activation = activation
         self.dropout = nn.Dropout(dropout)
         self.layers = nn.ModuleList()
-        self.layers.append(SAGEConv(self.in_feats, self.n_hidden))
+        self.layers.append(SAGEConv(self.input_channels, self.n_hidden))
         for i in range(n_layers - 1):
             self.layers.append(SAGEConv(self.n_hidden, self.n_hidden))
 
     def forward(self, edge_index, inputs):
+        """
+        Forward pass for the Encoder.
+
+        Parameters
+        ----------
+        edge_index : torch.Tensor
+            Edge indices.
+        inputs : torch.Tensor
+            Input node features.
+
+        Returns
+        -------
+        torch.Tensor
+            Output node features.
+        """
         h = inputs
         for l, conv in enumerate(self.layers):
             h = conv(edge_index, h)
@@ -206,10 +246,36 @@ class EdgePooling(torch.nn.Module):
         return '{}({})'.format(self.__class__.__name__, self.in_channels)
 
 class HGEncoder(nn.Module):
-    def __init__(self, in_channels, hidden_channels, depth,
+    def __init__(self, input_channels, hidden_channels, depth,
                  dropout_ratio, activation=F.relu):
+        """
+        Encoder for the HGVAE model.
+
+        Parameters
+        ----------
+        input_channels : int
+            Number of input channels.
+        hidden_channels : int
+            Number of hidden channels.
+        depth : int
+            Number of layers.
+        dropout_ratio : float
+            Dropout rate.
+        activation : callable, optional
+            Activation function, by default F.relu.
+
+        Examples
+        --------
+        >>> encoder = HGEncoder(input_channels=16, hidden_channels=32, depth=3, dropout_ratio=0.5)
+        >>> x = torch.randn(10, 16)
+        >>> edge_index = torch.randint(0, 10, (2, 20))
+        >>> batch = torch.randint(0, 2, (10,))
+        >>> h, mu, log_var, unpool_infos = encoder(x, edge_index, batch)
+        >>> print(h.shape, mu.shape, log_var.shape)
+        torch.Size([10, 32]) torch.Size([10, 32]) torch.Size([10, 32])
+        """
         super(HGEncoder, self).__init__()
-        self.in_channels = in_channels
+        self.input_channels = input_channels
         self.hidden_channels = hidden_channels
         self.depth = depth
         self.activation = activation
@@ -218,17 +284,43 @@ class HGEncoder(nn.Module):
         self.pool_layers = nn.ModuleList()
         self.mu_layer = nn.Linear(self.hidden_channels, self.hidden_channels)
         self.log_var_layer = nn.Linear(self.hidden_channels, self.hidden_channels)
-        self.gcn_layers.append(GraphConv(in_channels, self.hidden_channels))
+        self.gcn_layers.append(GraphConv(input_channels, self.hidden_channels))
         for layer in range(depth):
             self.gcn_layers.append(GraphConv(self.hidden_channels, self.hidden_channels))
             self.pool_layers.append(EdgePooling(self.hidden_channels))
         self.reset_parameters()
 
     def reset_parameters(self):
+        """
+        Reset the parameters of the HGEncoder.
+        """
         nn.init.xavier_uniform_(self.mu_layer.weight, gain=nn.init.calculate_gain('relu'))
         nn.init.xavier_uniform_(self.log_var_layer.weight, gain=nn.init.calculate_gain('relu'))
 
     def forward(self, x, edge_index, batch):
+        """
+        Forward pass for the HGEncoder.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input node features.
+        edge_index : torch.Tensor
+            Edge indices.
+        batch : torch.Tensor
+            Batch indices.
+
+        Returns
+        -------
+        torch.Tensor
+            Output node features.
+        torch.Tensor
+            Mean of the latent variables.
+        torch.Tensor
+            Log variance of the latent variables.
+        list
+            Unpooling information.
+        """
         unpool_infos = []
         h = x
         for i, conv in enumerate(self.gcn_layers):
@@ -245,26 +337,88 @@ class HGEncoder(nn.Module):
 
 
 class HGDecoder(nn.Module):
-    def __init__(self, hidden_channels, out_channels, depth,
+    def __init__(self, hidden_channels, output_channels, depth,
                  dropout_ratio, activation=F.relu):
+        """
+        Decoder for the HGVAE model.
+
+        Parameters
+        ----------
+        hidden_channels : int
+            Number of hidden channels.
+        output_channels : int
+            Number of output channels.
+        depth : int
+            Number of layers.
+        dropout_ratio : float
+            Dropout rate.
+        activation : callable, optional
+            Activation function, by default F.relu.
+
+        Examples
+        --------
+        >>> decoder = HGDecoder(hidden_channels=32, output_channels=16, depth=3, dropout_ratio=0.5)
+        >>> x = torch.randn(10, 32)
+        >>> edge_index = torch.randint(0, 10, (2, 20))
+        >>> unpool_infos = [None] * 3
+        >>> out = decoder(x, edge_index, unpool_infos)
+        >>> print(out.shape)
+        torch.Size([10, 16])
+        """
         super(HGDecoder, self).__init__()
         self.hidden_channels = hidden_channels
-        self.out_channels = out_channels
+        self.output_channels = output_channels
         self.depth = depth
         self.activation = activation
         self.dropout = nn.Dropout(dropout_ratio)
         self.gcn_layers = nn.ModuleList()
         self.pool_layers = nn.ModuleList()
-        self.gcn_layers.append(GraphConv(self.hidden_channels, out_channels))
+        self.gcn_layers.append(GraphConv(self.hidden_channels, output_channels))
         for layer in range(depth):
             self.gcn_layers.append(GraphConv(self.hidden_channels, self.hidden_channels))
 
     def unpool(self, x, unpool_info):
+        """
+        Unpooling operation for the HGDecoder.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input node features.
+        unpool_info : namedtuple
+            Unpooling information.
+
+        Returns
+        -------
+        torch.Tensor
+            Unpooled node features.
+        torch.Tensor
+            Edge indices.
+        torch.Tensor
+            Batch indices.
+        """
         new_x = x / unpool_info.new_edge_score.view(-1, 1)
         new_x = new_x[unpool_info.cluster]
         return new_x, unpool_info.edge_index, unpool_info.batch
 
     def forward(self, x, edge_index, unpool_infos):
+        """
+        Forward pass for the HGDecoder.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input node features.
+        edge_index : torch.Tensor
+            Edge indices.
+        unpool_infos : list
+            Unpooling information.
+
+        Returns
+        -------
+        torch.Tensor
+            Output node features.
+        """
         h = x
         for i, conv in reversed(list(enumerate(self.gcn_layers))):
             if i != 0:
@@ -279,10 +433,32 @@ class HGDecoder(nn.Module):
 
 class VAELoss(nn.Module):
     def __init__(self):
+        """
+        Loss function for the HGVAE model.
+        """
         super(VAELoss, self).__init__()
         self.mse = nn.MSELoss(reduction="sum")
 
     def forward(self, recon_x, x, mean, log_var):
+        """
+        Compute the VAE loss.
+
+        Parameters
+        ----------
+        recon_x : torch.Tensor
+            Reconstructed node features.
+        x : torch.Tensor
+            Original node features.
+        mean : torch.Tensor
+            Mean of the latent variables.
+        log_var : torch.Tensor
+            Log variance of the latent variables.
+
+        Returns
+        -------
+        torch.Tensor
+            VAE loss.
+        """
         if recon_x.shape[1] != x.shape[1]:
             x = x[:, :recon_x.shape[1]]
         recon_loss = self.mse(recon_x, x)
@@ -291,23 +467,84 @@ class VAELoss(nn.Module):
 
 
 class HGVAE(nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels, depth, dropout_ratio, activation=F.relu):
+    def __init__(self, input_channels, hidden_channels, output_channels, depth, dropout_ratio, activation=F.relu):
+        """
+        HGVAE model.
+
+        Parameters
+        ----------
+        input_channels : int
+            Number of input channels.
+        hidden_channels : int
+            Number of hidden channels.
+        output_channels : int
+            Number of output channels.
+        depth : int
+            Number of layers.
+        dropout_ratio : float
+            Dropout rate.
+        activation : callable, optional
+            Activation function, by default F.relu.
+
+        Examples
+        --------
+        >>> model = HGVAE(input_channels=16, hidden_channels=32, output_channels=16, depth=3, dropout_ratio=0.5)
+        >>> x = torch.randn(10, 16)
+        >>> edge_index = torch.randint(0, 10, (2, 20))
+        >>> batch = torch.randint(0, 2, (10,))
+        >>> h, mu, log_var = model(x, edge_index, batch)
+        >>> print(h.shape, mu.shape, log_var.shape)
+        torch.Size([10, 16]) torch.Size([10, 32]) torch.Size([10, 32])
+        """
         super(HGVAE, self).__init__()
-        self.encoder = HGEncoder(in_channels, hidden_channels, depth, dropout_ratio, activation)
-        self.decoder = HGDecoder(hidden_channels, out_channels, depth, dropout_ratio, activation)
+        self.encoder = HGEncoder(input_channels, hidden_channels, depth, dropout_ratio, activation)
+        self.decoder = HGDecoder(hidden_channels, output_channels, depth, dropout_ratio, activation)
 
     def sampling(self, mean, log_var):
+        """
+        Sampling operation for the HGVAE model.
+
+        Parameters
+        ----------
+        mean : torch.Tensor
+            Mean of the latent variables.
+        log_var : torch.Tensor
+            Log variance of the latent variables.
+
+        Returns
+        -------
+        torch.Tensor
+            Sampled latent variables.
+        """
         std = torch.exp(0.5*log_var)
         eps = torch.rand_like(std)
         return torch.mul(eps, torch.add(std, mean))
 
     def forward(self, x, edge_index, batch=None):
+        """
+        Forward pass for the HGVAE model.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input node features.
+        edge_index : torch.Tensor
+            Edge indices.
+        batch : torch.Tensor, optional
+            Batch indices, by default None.
+
+        Returns
+        -------
+        torch.Tensor
+            Output node features.
+        torch.Tensor
+            Mean of the latent variables.
+        torch.Tensor
+            Log variance of the latent variables.
+        """
         if batch is None:
             batch = edge_index.new_zeros(x.size(0))
         h, mu, log_var, unpool_infos = self.encoder(x, edge_index, batch)
         z = self.sampling(mu, log_var)
         h = self.decoder(z, edge_index, unpool_infos) # sampled z causes gradient computation to fail.
         return h, mu, log_var
-
-
-
