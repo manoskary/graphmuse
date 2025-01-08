@@ -41,3 +41,15 @@ The GraphMuse processing pipeline involves the following steps:
 5. **Evaluation**: Evaluate the trained models on test data to assess their performance.
 
 The pipeline is designed to be flexible and modular, allowing users to experiment with different graph representations, sampling strategies, and models for their music data.
+
+<p align="center">
+   <img src="https://raw.githubusercontent.com/manoskary/graphmuse/main/assets/graphmuse_pipeline.png" height="150">
+</p>
+
+<p align="center">
+   <img src="https://raw.githubusercontent.com/manoskary/graphmuse/main/assets/satie_graph.png" height="200">
+</p>
+
+<p align="center">
+   <img src="https://raw.githubusercontent.com/manoskary/graphmuse/main/assets/sampling_graphmuse.png" height="400">
+</p>

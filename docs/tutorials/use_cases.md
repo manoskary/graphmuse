@@ -108,6 +108,76 @@ accuracy = accuracy_score(all_labels, all_preds)
 print(f'Test Accuracy: {accuracy}')
 ```
 
+## Using the Provided Models
+
+GraphMuse includes several pre-defined models for processing music graphs. In this section, we will demonstrate how to use these models with examples.
+
+### Example: Using the MetricalGNN Model
+
+The `MetricalGNN` model is a graph neural network designed for processing music graphs. Here is an example of how to use it:
+
+```python
+import graphmuse.nn as gmnn
+import torch
+
+# Define the number of input features, output features, and edge features
+num_input_features = 10
+num_hidden_features = 10
+num_output_features = 10
+num_layers = 1
+
+# Metadata needs to be provided for the metrical graph similarly to Pytorch Geometric heterogeneous graph modules.
+metadata = (
+    ['note'],
+    [('note', 'onset', 'note')]
+)
+
+# Create an instance of the MetricalGNN class
+metrical_gnn = gmnn.MetricalGNN(num_input_features, num_hidden_features, num_output_features, num_layers, metadata=metadata)
+
+# Create some dummy data for the forward pass
+num_nodes = 5
+x_dict = {'note': torch.rand((num_nodes, num_input_features))}
+edge_index_dict = {('note', 'onset', 'note'): torch.tensor([[0, 1, 2, 3, 4], [1, 2, 3, 4, 0]])}
+
+# Perform a forward pass
+out = metrical_gnn(x_dict, edge_index_dict)
+print(out)
+```
+
+### Example: Using the CadenceGNN Model
+
+The `CadenceGNN` model is a graph neural network designed for cadence detection in music. Here is an example of how to use it:
+
+```python
+import graphmuse.nn as gmnn
+import torch
+
+# Define the number of input features, output features, and edge features
+num_input_features = 10
+num_hidden_features = 10
+num_output_features = 2
+num_layers = 3
+
+# Metadata needs to be provided for the metrical graph similarly to Pytorch Geometric heterogeneous graph modules.
+metadata = (
+    ['note'],
+    [('note', 'onset', 'note')]
+)
+
+# Create an instance of the CadenceGNN class
+cadence_gnn = gmnn.CadenceGNN(metadata, num_input_features, num_hidden_features, num_output_features, num_layers)
+
+# Create some dummy data for the forward pass
+num_nodes = 5
+x_dict = {'note': torch.rand((num_nodes, num_input_features))}
+edge_index_dict = {('note', 'onset', 'note'): torch.tensor([[0, 1, 2, 3, 4], [1, 2, 3, 4, 0]])}
+
+# Perform a forward pass
+out = cadence_gnn(x_dict, edge_index_dict)
+print(out)
+```
+
 ## Conclusion
 
 In this tutorial, we have covered specific use cases in GraphMuse, including training a model on a dataset and evaluating its performance. By following these steps, you can effectively train and evaluate models on symbolic music data using GraphMuse.
