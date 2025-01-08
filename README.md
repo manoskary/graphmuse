@@ -215,6 +215,14 @@ The conceptual structure of sampling from each score graph is shown below:
    <img src="https://raw.githubusercontent.com/manoskary/graphmuse/main/assets/sampling_graphmuse.png" height="400">
 </p>
 
+## Documentation
+
+For more detailed documentation, including an introduction, repository structure, and tutorials on handling data and specific use cases, please refer to the [GraphMuse Documentation](docs/index.md).
+
+### Tutorials
+
+- [Handling Data](docs/tutorials/handling_data.md): Learn how to handle data, create score graphs, and use the provided models with examples.
+- [Use Cases](docs/tutorials/use_cases.md): Explore specific use cases, such as training a model on a dataset and evaluating its performance.
 
 ## Citing GraphMuse
 
