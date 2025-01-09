@@ -105,14 +105,15 @@ class HierarchicalHeteroGraphConv(torch.nn.Module):
             HeteroConv(
                 {
                     edge_type: CustomGATConv(input_channels, hidden_channels, heads=4, add_self_loops=False)
-                    for edge type in edge types
-                }, aggr='mean')
+                    for edge_type in edge_types
+                }, aggr='mean'
+            )
         )
         for _ in range(num_layers-1):
             conv = HeteroConv(
                 {
                     edge_type: CustomGATConv(hidden_channels, hidden_channels, heads=4, add_self_loops=False)
-                    for edge type in edge types
+                    for edge_type in edge_types
                 }, aggr='mean')
             self.convs.append(conv)
             self.layer_norms.append(nn.LayerNorm(hidden_channels))
@@ -178,14 +179,14 @@ class FastHierarchicalHeteroGraphConv(torch.nn.Module):
             HeteroConv(
                 {
                     edge_type: SAGEConv(input_channels, hidden_channels, normalize=True, project=True)
-                    for edge type in edge types
+                    for edge_type in edge_types
                 }, aggr='mean')
         )
         for _ in range(num_layers - 1):
             conv = HeteroConv(
                 {
-                    edge type: SAGEConv(hidden_channels, hidden_channels)
-                    for edge type in edge types
+                    edge_type: SAGEConv(hidden_channels, hidden_channels)
+                    for edge_type in edge_types
                 }, aggr='mean')
             self.convs.append(conv)
             self.layer_norms.append(nn.LayerNorm(hidden_channels))
@@ -331,14 +332,14 @@ class HybridGNN(torch.nn.Module):
             HeteroConv(
                 {
                     edge_type: SAGEConv(input_channels, hidden_channels, normalize=True, project=True)
-                    for edge type in edge types
+                    for edge_type in edge_types
                 }, aggr='mean')
         )
         for _ in range(num_layers - 1):
             conv = HeteroConv(
                 {
-                    edge type: SAGEConv(hidden_channels, hidden_channels)
-                    for edge type in edge types
+                    edge_type: SAGEConv(hidden_channels, hidden_channels)
+                    for edge_type in edge_types
                 }, aggr='mean')
             self.convs.append(conv)
             self.layer_norms.append(nn.LayerNorm(hidden_channels))

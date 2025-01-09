@@ -51,7 +51,8 @@ class MuseNeighborLoader(DataLoader):
     share_memory : bool, optional
         Whether to share memory, by default False.
     order_batch : bool, optional
-        Whether to order the batch, by default True.
+        Whether to order the batch based on the number of target nodes from each sampled subgraph, by default True.
+        This is useful whenever using HybridGNN or sequential models on top of graph model to use packed sequences.
     **kwargs
         Additional arguments for the DataLoader.
 
@@ -140,6 +141,7 @@ class MuseNeighborLoader(DataLoader):
             data_list = [data_list[i] for i in idx]
         # create a batch object
         batch_out = Batch.from_data_list(data_list)
+        batch_out["note"].subgraph_target_count = target_nodes
         if self.transform is not None:
             batch_out = self.transform(batch_out, self.num_neighbors.num_hops)
         return batch_out
