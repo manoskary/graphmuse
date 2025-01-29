@@ -262,8 +262,10 @@ class MetricalGNN(nn.Module):
         metadata (Tuple[Dict[str, int], List[Tuple[str, str]]]): Metadata of the graph
         dropout (float, optional): Dropout rate. Defaults to 0.5.
         fast (bool, optional): Whether to use FastHierarchicalHeteroGraphConv. Defaults to False.
+        remove_metrical_features: Whether to use features from metrical nodes or directly learn from neighbor features.
     """
-    def __init__(self, input_channels, hidden_channels, output_channels, num_layers, metadata, dropout=0.5, fast=False):
+    def __init__(self, input_channels, hidden_channels, output_channels, num_layers, metadata, dropout=0.5,
+                 fast=False, remove_metrical_features=False):
         super(MetricalGNN, self).__init__()
         self.num_layers = num_layers
 
@@ -273,16 +275,6 @@ class MetricalGNN(nn.Module):
         else:
             self.gnn = HierarchicalHeteroGraphSage(metadata[1], input_channels, hidden_channels, num_layers)
             self.fhs = False
-        # encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_channels, nhead=8)
-        # self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=3, norm=nn.LayerNorm(hidden_channels),
-        #                                                  enable_nested_tensor=False)
-        # self.gru_model = nn.Sequential(
-        #     GRUWrapper(input_size=output_channels, hidden_size=output_channels, num_layers=1, batch_first=True),
-        #     nn.ReLU(),
-        #     nn.LayerNorm(output_channels),
-        #     nn.Dropout(dropout),
-        #     GRUWrapper(input_size=output_channels, hidden_size=output_channels, num_layers=1, batch_first=True),
-        # )
         self.mlp = nn.Sequential(
             nn.Linear(hidden_channels, hidden_channels),
             nn.ReLU(),
@@ -290,6 +282,7 @@ class MetricalGNN(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(hidden_channels, output_channels)
         )
+        self.remove_metrical_features = remove_metrical_features
 
     def forward(self, x_dict, edge_index_dict, neighbor_mask_node=None, neighbor_mask_edge=None):
         """
