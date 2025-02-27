@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import SAGEConv, HeteroConv, GATConv, MessagePassing, HGTConv, JumpingKnowledge
+from torch_geometric.nn import SAGEConv, HeteroConv, GATConv, MessagePassing, HGTConv, JumpingKnowledge, \
+    HeteroJumpingKnowledge
 from graphmuse.utils.graph_utils import trim_to_layer
 from torch_geometric.utils import trim_to_layer as trim_to_layer_pyg
 from graphmuse.nn.conv.gat import CustomGATConv
@@ -163,18 +164,23 @@ class FastHierarchicalHeteroGraphConv(torch.nn.Module):
     Fast Hierarchical Hetero GraphConv model that uses SAGEConv as the convolutional layer
 
     Args:
-        edge_types (List[str]): List of edge types
+        metadata (Tuple(List, List[str])): Metadata of the graph
         input_channels (int): Number of input channels
         hidden_channels (int): Number of hidden channels
         num_layers (int): Number of layers
         dropout (float, optional): Dropout rate. Defaults to 0.5.
     """
-    def __init__(self, edge_types, input_channels, hidden_channels, num_layers, dropout=0.5):
+    def __init__(self, metadata, input_channels, hidden_channels, num_layers, dropout=0.5, use_jk=False):
         super().__init__()
         self.num_layers = num_layers
         self.convs = torch.nn.ModuleList()
         self.layer_norms = torch.nn.ModuleList()
         self.dropout = nn.Dropout(dropout)
+        edge_types = metadata[1]
+        if use_jk:
+            self.jk = HeteroJumpingKnowledge(
+                types=metadata[0], mode='lstm', channels=hidden_channels, num_layers=num_layers)
+        self.use_jk = use_jk
         self.convs.append(
             HeteroConv(
                 {
@@ -205,6 +211,7 @@ class FastHierarchicalHeteroGraphConv(torch.nn.Module):
         Returns:
             Dict[str, Tensor]: Output dictionary of node features
         """
+        x_dict_list = {key: [] for key in x_dict}
         for i, conv in enumerate(self.convs):
             if not neighbor_mask_edge is None and not neighbor_mask_node is None:
                 x_dict, edge_index_dict, _ = trim_to_layer_pyg(
@@ -219,6 +226,15 @@ class FastHierarchicalHeteroGraphConv(torch.nn.Module):
                 x_dict = {key: x.relu() for key, x in x_dict.items()}
                 x_dict = {key: self.layer_norms[i](x) for key, x in x_dict.items()}
                 x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
+
+            for key in x_dict.keys():
+                x_dict_list[key].append(x_dict[key])
+
+        if self.use_jk:
+            batch_sizes = {k: x_dict[k].shape[0] for k in x_dict.keys()}
+            x_dict_list = {k: [z[:batch_sizes[k]] for z in v] for k, v in x_dict_list.items()}
+            x_dict = self.jk(x_dict_list)
+
         return x_dict
 
 
@@ -265,15 +281,15 @@ class MetricalGNN(nn.Module):
         remove_metrical_features: Whether to use features from metrical nodes or directly learn from neighbor features.
     """
     def __init__(self, input_channels, hidden_channels, output_channels, num_layers, metadata, dropout=0.5,
-                 fast=False, remove_metrical_features=False):
+                 fast=False, remove_metrical_features=False, use_jk=False):
         super(MetricalGNN, self).__init__()
         self.num_layers = num_layers
 
         if fast:
-            self.gnn = FastHierarchicalHeteroGraphConv(metadata[1], input_channels, hidden_channels, num_layers)
+            self.gnn = FastHierarchicalHeteroGraphConv(metadata, input_channels, hidden_channels, num_layers, dropout=dropout, use_jk=use_jk)
             self.fhs = True
         else:
-            self.gnn = HierarchicalHeteroGraphSage(metadata[1], input_channels, hidden_channels, num_layers)
+            self.gnn = HierarchicalHeteroGraphSage(metadata[1], input_channels, hidden_channels, num_layers, dropout=dropout)
             self.fhs = False
         self.mlp = nn.Sequential(
             nn.Linear(hidden_channels, hidden_channels),
