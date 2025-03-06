@@ -60,3 +60,14 @@ The pipeline is designed to be flexible and modular, allowing users to experimen
 .. image:: https://raw.githubusercontent.com/manoskary/graphmuse/main/assets/sampling_graphmuse.png
    :height: 400
    :align: center
+
+
+.. _api_reference:
+
+.. toctree::
+   :maxdepth: 2
+   :caption: API Reference
+
+   ./modules/graphmuse.loader
+   
+
