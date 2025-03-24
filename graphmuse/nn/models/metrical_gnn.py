@@ -419,7 +419,8 @@ class HybridGNN(torch.nn.Module):
         x = self.hybrid_forward(x_note_target, batch_note)
 
         x_dict = self.gnn(
-            x_dict, edge_index_dict, neighbor_mask_node, neighbor_mask_edge, edge_attr_dict=edge_attr_dict
+            x_dict, edge_index_dict, edge_attr_dict=edge_attr_dict,
+            neighbor_mask_node=neighbor_mask_node, neighbor_mask_edge=neighbor_mask_edge
         )
         x_gnn = x_dict["note"][:batch_size]
         x = self.cat_proj(torch.cat([x, x_gnn], dim=-1))
