@@ -455,7 +455,7 @@ class HybridHGT(torch.nn.Module):
             num_layers: int,
             heads: int = 4,
             dropout: float = 0.5,
-            jk = False
+            use_jk = False
 
     ):
         super().__init__()
@@ -481,7 +481,7 @@ class HybridHGT(torch.nn.Module):
             nn.Linear(hidden_channels, hidden_channels),
         )
         self.cat_proj = nn.Linear(hidden_channels * 2, hidden_channels)
-        if jk:
+        if use_jk:
             self.jk = JumpingKnowledge(mode='lstm', channels=hidden_channels, num_layers=num_layers)
 
     def hybrid_forward(self, x, batch):
@@ -499,17 +499,15 @@ class HybridHGT(torch.nn.Module):
         lengths = torch.bincount(batch)
         x = x.split(lengths.tolist())
         x = nn.utils.rnn.pad_sequence(x, batch_first=True, padding_value=0.0)
-        x = nn.utils.rnn.pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=True)
         x, _ = self.rnn(x)
-        x, _ = nn.utils.rnn.pad_packed_sequence(x, batch_first=True, padding_value=0.0)
         x = self.rnn_norm(x)
         x = self.rnn_mlp(x)
         x = nn.utils.rnn.unpad_sequence(x, batch_first=True, lengths=lengths)
         x = torch.cat(x, dim=0)
         return x
 
-    def forward(self, x_dict, edge_index_dict, batch_dict, batch_size=None, neighbor_mask_node=None,
-                neighbor_mask_edge=None, return_edge_index=False):
+    def forward(self, x_dict, edge_index_dict, batch_dict, batch_size, neighbor_mask_node,
+                neighbor_mask_edge, return_edge_index=False, edge_attr_dict=None):
         """
         Forward pass of the Hybrid GNN model
 
