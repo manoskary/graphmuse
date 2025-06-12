@@ -34,8 +34,9 @@ def get_score_features(score) -> Tuple[np.ndarray, List]:
     pc_oh, pc_names = get_pc_one_hot(note_array)
     # duration_feature = np.expand_dims(1- (1/(1+np.exp(-3*(note_array["duration_beat"]/note_array["ts_beats"])))-0.5)*2, 1)
     duration_feature = np.expand_dims(1 - np.tanh(note_array["duration_beat"]/note_array["ts_beats"]), 1)
-    dur_names = ["bar_exp_duration"]
-    # on_names = ["barnorm_onset", "piecenorm_onset"]
+    onset_feature = np.expand_dims(
+        np.remainder(note_array["onset_beat"], note_array["ts_beats"]) / note_array["ts_beats"], 1)
+    dur_names = ["bar_exp_duration", "onset_bar_norm"]
     names = dur_names + pc_names + octave_names
-    out = np.hstack((duration_feature, pc_oh, octave_oh))
+    out = np.hstack((duration_feature, onset_feature, pc_oh, octave_oh))
     return out, names
