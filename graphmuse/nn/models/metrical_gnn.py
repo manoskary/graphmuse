@@ -316,7 +316,7 @@ class MetricalGNN(nn.Module):
         )
         self.remove_metrical_features = remove_metrical_features
 
-    def forward(self, x_dict, edge_index_dict, neighbor_mask_node=None, neighbor_mask_edge=None):
+    def forward(self, x_dict, edge_index_dict, neighbor_mask_node=None, neighbor_mask_edge=None, **kwargs):
         """
         Forward pass of the MetricalGNN model
 
@@ -329,8 +329,11 @@ class MetricalGNN(nn.Module):
         Returns:
             Tensor: Output tensor
         """
-        x_dict = self.gnn(x_dict, edge_index_dict, neighbor_mask_node, neighbor_mask_edge)
+        x_dict = self.gnn(x_dict, edge_index_dict, neighbor_mask_node=neighbor_mask_node, neighbor_mask_edge=neighbor_mask_edge)
         note = x_dict["note"]
+        if "batch_size" in kwargs:
+            batch_size = kwargs["batch_size"]
+            note = note[:batch_size]
         # Return the output
         out = self.mlp(note)
         return out

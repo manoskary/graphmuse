@@ -139,3 +139,5 @@ dmypy.json
 *.exp
 *.lib
 
+/build
+
