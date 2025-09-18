@@ -1,121 +1,91 @@
 Handling Data in GraphMuse
 ==========================
 
-This tutorial will guide you through the process of handling data in GraphMuse, including creating score graphs and using the provided models with examples.
+This tutorial walks through the data utilities bundled with GraphMuse, from constructing score
+graphs to sampling sub-graphs suitable for model training.
 
 Creating Score Graphs
-----------------------
+---------------------
 
-GraphMuse provides a convenient way to create score graphs from symbolic music data. The `create_score_graph` function allows you to create a graph representation of a music score.
-
-Example: Creating a Score Graph
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+GraphMuse interoperates with `Partitura <https://github.com/CPJKU/partitura>`_ to parse MusicXML and
+convert the resulting note arrays into heterogeneous score graphs.
 
 .. code-block:: python
 
-    import graphmuse as gm
-    import partitura
-    import torch
+   import partitura
+   import torch
 
-    # Load a music score using Partitura
-    score = partitura.load_musicxml('path_to_musicxml')
-    note_array = score.note_array()
+   import graphmuse as gm
 
-    # Generate random features for the notes
-    feature_array = torch.rand((len(note_array), 10))
+   score = partitura.load_musicxml("path/to/score.musicxml")
+   note_array = score.note_array()
 
-    # Create a score graph
-    score_graph = gm.create_score_graph(feature_array, note_array)
-    print(score_graph)
+   # Random features for demonstration purposes
+   features = torch.rand((len(note_array), 12))
 
-In this example, we load a music score using Partitura, generate random features for the notes, and create a score graph using the `create_score_graph` function.
+   score_graph = gm.create_score_graph(features, note_array)
+   print(score_graph)
 
-Using the Provided Models
---------------------------
+Each score graph is a :class:`torch_geometric.data.HeteroData` instance containing node features for
+notes, optional beat nodes, and the relevant edge relationships.
 
-GraphMuse includes several pre-defined models for processing music graphs. In this section, we will demonstrate how to use these models with examples.
+Sampling and Batching
+---------------------
 
-Example: Using the MetricalGNN Model
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The `MetricalGNN` model is a graph neural network designed for processing music graphs. Here is an example of how to use it:
+The :class:`graphmuse.loader.MuseNeighborLoader` wraps PyTorch Geometric's neighbor sampling API with
+music-aware defaults.
 
 .. code-block:: python
 
-    import graphmuse.nn as gmnn
-    import torch
+   from graphmuse.loader import MuseNeighborLoader
 
-    # Define the number of input features, output features, and edge features
-    num_input_features = 10
-    num_hidden_features = 10
-    num_output_features = 10
-    num_layers = 1
+   loader = MuseNeighborLoader(
+       [score_graph],
+       subgraph_size=64,
+       batch_size=2,
+       num_neighbors=[3, 3, 3],
+   )
 
-    # Metadata needs to be provided for the metrical graph similarly to Pytorch Geometric heterogeneous graph modules.
-    metadata = (
-        ['note'],
-        [('note', 'onset', 'note')]
-    )
+   for batch in loader:
+       print(batch)
 
-    # Create an instance of the MetricalGNN class
-    metrical_gnn = gmnn.MetricalGNN(num_input_features, num_hidden_features, num_output_features, num_layers, metadata=metadata)
+The loader yields mini-batches that preserve the heterogeneous structure of the underlying graph,
+ready for consumption by the neural network modules in :mod:`graphmuse.nn`.
 
-    # Create some dummy data for the forward pass
-    num_nodes = 5
-    x_dict = {'note': torch.rand((num_nodes, num_input_features))}
-    edge_index_dict = {('note', 'onset', 'note'): torch.tensor([[0, 1, 2, 3, 4], [1, 2, 3, 4, 0]])}
+Working with Synthetic Graphs
+-----------------------------
 
-    # Perform a forward pass
-    out = metrical_gnn(x_dict, edge_index_dict)
-    print(out)
-
-In this example, we define the number of input features, output features, and edge features, create an instance of the `MetricalGNN` class, and perform a forward pass with some dummy data.
-
-Data Handling Pipeline
-----------------------
-
-The data handling pipeline in GraphMuse involves several steps, including data loading, graph creation, sampling, and model training. Here is an overview of the pipeline:
-
-1. **Data Loading**: Load symbolic music data using libraries like Partitura.
-2. **Graph Creation**: Create score graphs from the loaded data using the `create_score_graph` function.
-3. **Sampling**: Use the provided sampling strategies to sample subgraphs from the score graphs.
-4. **Data Loading**: Utilize the data loaders to batch and load the sampled subgraphs.
-5. **Model Training**: Train the provided neural network models on the batched subgraphs.
-6. **Evaluation**: Evaluate the trained models on test data to assess their performance.
-
-Example: Data Handling Pipeline
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The :mod:`graphmuse.utils` module includes helpers for generating random graphs that mimic the
+structure of symbolic music. These are designed for unit tests and experimentation when real data
+is unavailable.
 
 .. code-block:: python
 
-    import graphmuse as gm
-    import partitura
-    import torch
-    from graphmuse.loader import MuseNeighborLoader
+   import numpy as np
+   import torch
 
-    # Load a music score using Partitura
-    score = partitura.load_musicxml('path_to_musicxml')
-    note_array = score.note_array()
+   from graphmuse.loader import MuseNeighborLoader
+   from graphmuse.utils import create_random_music_graph
 
-    # Generate random features for the notes
-    feature_array = torch.rand((len(note_array), 10))
+   graphs = []
+   for _ in range(5):
+       graph = create_random_music_graph(
+           graph_size=np.random.randint(100, 200),
+           min_duration=1,
+           max_duration=20,
+           feature_size=10,
+           add_beat_nodes=True,
+       )
+       # Optionally attach labels for supervised tasks
+       labels = np.random.randint(0, 4, graph["note"].x.shape[0])
+       graph["note"].y = torch.tensor(labels, dtype=torch.long)
+       graphs.append(graph)
 
-    # Create a score graph
-    score_graph = gm.create_score_graph(feature_array, note_array)
+   loader = MuseNeighborLoader(graphs, subgraph_size=50, batch_size=4, num_neighbors=[3, 3, 3])
+   first_batch = next(iter(loader))
+   print(first_batch["note"].x.shape)
 
-    # Create a list of score graphs (for demonstration purposes)
-    score_graphs = [score_graph]
-
-    # Create a data loader for sampling and batching
-    dataloader = MuseNeighborLoader(score_graphs, subgraph_size=50, batch_size=4, num_neighbors=[3, 3, 3])
-
-    # Iterate over the data loader to get batches of subgraphs
-    for batch in dataloader:
-        print(batch)
-
-In this example, we demonstrate the data handling pipeline by loading a music score, creating a score graph, and using the `MuseNeighborLoader` to sample and batch subgraphs.
-
-Conclusion
+Next Steps
 ----------
 
-In this tutorial, we have covered how to handle data in GraphMuse, including creating score graphs, using the provided models, and understanding the data handling pipeline. By following these steps, you can effectively process and analyze symbolic music data using GraphMuse.
+Continue with :doc:`use_cases` to train and evaluate GraphMuse models on the sampled data.

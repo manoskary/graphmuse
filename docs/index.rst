@@ -3,71 +3,66 @@
 GraphMuse Documentation
 =======================
 
-Introduction
-------------
+GraphMuse is a research toolkit for graph-based deep learning on symbolic music. It provides
+heterogeneous graph representations for scores, sampling utilities, and graph neural network
+architectures that are tailored to music analysis tasks.
 
-GraphMuse is a Python Library for Graph Deep Learning on Symbolic Music. This library aims to address Graph Deep Learning techniques and models applied specifically to Music Scores. It contains a core set of graph-based music representations, based on Pytorch Geometric Data and HeteroData classes. It includes functionalities for these graphs such as Sampling and several Graph Convolutional Networks.
+Quick Links
+-----------
 
-The main core of the library includes sampling strategies for Music Score Graphs, Dataloaders, Graph Creation classes, and Graph Convolutional Networks. The graph creation is implemented partly in C and works in unison with the Partitura library for parsing symbolic music.
+- :doc:`Getting started <getting_started>`
+- :doc:`Handling data <tutorials/handling_data>`
+- :doc:`Use cases <tutorials/use_cases>`
+- :ref:`api_reference`
+
+Features
+--------
+
+- Score graph creation pipelines with accelerated C extensions for performant preprocessing.
+- Sampling strategies and dataloaders optimised for symbolic music graphs.
+- A collection of graph neural network layers and models designed for metrical, cadence, and hybrid tasks.
+- Utilities to generate synthetic graphs for experimentation and prototyping.
 
 Repository Structure
 --------------------
 
-The repository is structured as follows:
-
-- `graphmuse`: Contains the main library code.
-  - `io`: Input/output utilities.
-  - `loader`: Data loaders and samplers.
-  - `nn`: Neural network modules and models.
-  - `samplers`: Sampling strategies for graphs.
-  - `utils`: Utility functions and classes.
-- `tests`: Contains test files to validate the functionality of the code.
-- `include`: Contains C source files and headers for performance optimization.
-- `docs`: Contains the documentation and tutorials.
-
-Available Modules
------------------
-
-### `graphmuse`
-
-- `io`: Provides utilities for input and output operations.
-- `loader`: Contains data loaders and samplers for handling graph data.
-- `nn`: Includes various neural network modules and models for graph-based learning.
-- `samplers`: Implements different sampling strategies for graphs.
-- `utils`: Offers utility functions and classes for graph manipulation and processing.
+- ``graphmuse`` – Library source code.
+  - ``io`` – Input/output utilities for interacting with score files.
+  - ``loader`` – Sampling dataloaders for heterogeneous music graphs.
+  - ``nn`` – Graph neural network modules and reference models.
+  - ``samplers`` – Interfaces to high-performance C sampling routines.
+  - ``utils`` – Helpers for graph creation and experimentation.
+- ``include`` – C headers that back the sampling extension.
+- ``docs`` – Documentation sources prepared for Read the Docs.
+- ``tests`` – PyTest-based regression tests.
 
 Processing Pipeline
 -------------------
 
-The GraphMuse processing pipeline involves the following steps:
+The typical workflow when using GraphMuse is:
 
-1. **Graph Creation**: Create a score graph from a music score using the `create_score_graph` function.
-2. **Sampling**: Use the provided sampling strategies to sample subgraphs from the score graph.
-3. **Data Loading**: Utilize the data loaders to batch and load the sampled subgraphs.
-4. **Model Training**: Train the provided neural network models on the batched subgraphs.
-5. **Evaluation**: Evaluate the trained models on test data to assess their performance.
+1. Create a score graph from symbolic music (e.g., MusicXML) via :func:`graphmuse.create_score_graph`.
+2. Sample sub-graphs with :class:`graphmuse.loader.MuseNeighborLoader` or other strategies.
+3. Train music-specific graph neural networks from :mod:`graphmuse.nn`.
+4. Evaluate the resulting model on held-out data.
 
-The pipeline is designed to be flexible and modular, allowing users to experiment with different graph representations, sampling strategies, and models for their music data.
-
-.. image:: https://raw.githubusercontent.com/manoskary/graphmuse/main/assets/graphmuse_pipeline.png
+.. figure:: https://raw.githubusercontent.com/manoskary/graphmuse/main/assets/graphmuse_pipeline.png
    :height: 150
    :align: center
 
-.. image:: https://raw.githubusercontent.com/manoskary/graphmuse/main/assets/satie_graph.png
-   :height: 200
-   :align: center
-
-.. image:: https://raw.githubusercontent.com/manoskary/graphmuse/main/assets/sampling_graphmuse.png
-   :height: 400
-   :align: center
-
+   The high-level GraphMuse pipeline.
 
 .. _api_reference:
 
+API Reference
+-------------
+
 .. toctree::
    :maxdepth: 2
-   :caption: API Reference
+   :caption: Contents
 
-   ./modules/graphmuse.loader
-   
+   getting_started
+   tutorials/handling_data
+   tutorials/use_cases
+   api
 

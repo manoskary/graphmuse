@@ -1,47 +1,54 @@
-API Documentation
-=================
+API Reference
+=============
+
+The API documentation is generated directly from the source. Heavy dependencies are mocked to
+keep the Read the Docs build lightweight; refer to the project requirements for runtime
+installation details.
+
+Core Package
+------------
 
 .. automodule:: graphmuse
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-graphmuse.io
+Input/Output
 ------------
 
 .. automodule:: graphmuse.io
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-graphmuse.loader
-----------------
+Loaders
+-------
 
 .. automodule:: graphmuse.loader
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-graphmuse.nn
-------------
-
-.. automodule:: graphmuse.nn
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-graphmuse.samplers
-------------------
-
-.. automodule:: graphmuse.samplers
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-graphmuse.utils
+Neural Networks
 ---------------
 
+.. automodule:: graphmuse.nn
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Samplers
+--------
+
+.. automodule:: graphmuse.samplers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Utilities
+---------
+
 .. automodule:: graphmuse.utils
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:
