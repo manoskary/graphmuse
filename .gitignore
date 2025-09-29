@@ -139,3 +139,4 @@ dmypy.json
 *.exp
 *.lib
 
+.nfs*
