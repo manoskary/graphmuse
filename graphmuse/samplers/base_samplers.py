@@ -52,7 +52,10 @@ class SubgraphMultiplicitySampler(Sampler):
             yield i.numpy().tolist()
 
     def __len__(self):
-        return self.num_samples // self.batch_size
+        if self.batch_size == 0:
+            return self.num_samples
+        else:
+            return self.num_samples // self.batch_size
 
     def element_to_bucket_id(self, x, seq_length):
         valid_buckets = (seq_length >= self.buckets_min) * (seq_length < self.buckets_max)

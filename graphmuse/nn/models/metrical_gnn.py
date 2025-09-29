@@ -1,7 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import SAGEConv, HeteroConv, GATConv, MessagePassing, HGTConv, JumpingKnowledge
+from torch_geometric.nn import SAGEConv, HeteroConv, GATConv, MessagePassing, HGTConv, JumpingKnowledge, \
+    HeteroJumpingKnowledge
+
+from graphmuse.nn import MusGConv
 from graphmuse.utils.graph_utils import trim_to_layer
 from torch_geometric.utils import trim_to_layer as trim_to_layer_pyg
 from graphmuse.nn.conv.gat import CustomGATConv
@@ -106,7 +109,8 @@ class HierarchicalHeteroGraphConv(torch.nn.Module):
                 {
                     edge_type: CustomGATConv(input_channels, hidden_channels, heads=4, add_self_loops=False)
                     for edge_type in edge_types
-                }, aggr='mean')
+                }, aggr='mean'
+            )
         )
         for _ in range(num_layers-1):
             conv = HeteroConv(
@@ -162,35 +166,52 @@ class FastHierarchicalHeteroGraphConv(torch.nn.Module):
     Fast Hierarchical Hetero GraphConv model that uses SAGEConv as the convolutional layer
 
     Args:
-        edge_types (List[str]): List of edge types
+        metadata (Tuple(List, List[str])): Metadata of the graph
         input_channels (int): Number of input channels
         hidden_channels (int): Number of hidden channels
         num_layers (int): Number of layers
         dropout (float, optional): Dropout rate. Defaults to 0.5.
+        use_jk (bool, optional): Whether to use Jumping Knowledge. Defaults to False.
+        edge_features_dim (int, optional): Dimension of edge features. Defaults to None.
     """
-    def __init__(self, edge_types, input_channels, hidden_channels, num_layers, dropout=0.5):
+    def __init__(self, metadata, input_channels, hidden_channels, num_layers, dropout=0.5, use_jk=False, input_edge_feature_channels=None):
         super().__init__()
         self.num_layers = num_layers
         self.convs = torch.nn.ModuleList()
         self.layer_norms = torch.nn.ModuleList()
         self.dropout = nn.Dropout(dropout)
-        self.convs.append(
+        edge_types = metadata[1]
+        if use_jk:
+            self.jk = HeteroJumpingKnowledge(
+                types=metadata[0], mode='lstm', channels=hidden_channels, num_layers=num_layers)
+        self.use_jk = use_jk
+        if input_edge_feature_channels is not None:
             HeteroConv(
                 {
-                    edge_type: SAGEConv(input_channels, hidden_channels, normalize=True, project=True)
-                    for edge type in edge types
-                }, aggr='mean')
-        )
+                    edge_type: MusGConv(input_channels, hidden_channels, in_edge_channels=ed, norm_msg=True)
+                    if edge_type[0] == "note" and edge_type[-1] == "note" else
+                    SAGEConv(input_channels, hidden_channels, normalize=True, project=True)
+                    for edge_type in edge_types
+                }, aggr='mean'
+            )
+        else:
+            self.convs.append(
+                HeteroConv(
+                    {
+                        edge_type: SAGEConv(input_channels, hidden_channels, normalize=True, project=True)
+                        for edge_type in edge_types
+                    }, aggr='mean')
+            )
         for _ in range(num_layers - 1):
             conv = HeteroConv(
                 {
-                    edge type: SAGEConv(hidden_channels, hidden_channels)
-                    for edge type in edge types
+                    edge_type: SAGEConv(hidden_channels, hidden_channels)
+                    for edge_type in edge_types
                 }, aggr='mean')
             self.convs.append(conv)
             self.layer_norms.append(nn.LayerNorm(hidden_channels))
 
-    def forward(self, x_dict, edge_index_dict, neighbor_mask_node=None,
+    def forward(self, x_dict, edge_index_dict, edge_attr_dict=None, neighbor_mask_node=None,
                 neighbor_mask_edge=None):
         """
         Forward pass of the Fast Hierarchical Hetero GraphConv model
@@ -198,12 +219,14 @@ class FastHierarchicalHeteroGraphConv(torch.nn.Module):
         Args:
             x_dict (Dict[str, Tensor]): Dictionary of node features
             edge_index_dict (Dict[str, LongTensor]): Dictionary of edge indices
+            edge_attr_dict (Dict[str, Tensor], optional): Dictionary of edge attributes. Defaults to None.
             neighbor_mask_node (Dict[str, List[int]], optional): Dictionary of neighbor mask for nodes. Defaults to None.
             neighbor_mask_edge (Dict[str, List[int]], optional): Dictionary of neighbor mask for edges. Defaults to None.
 
         Returns:
             Dict[str, Tensor]: Output dictionary of node features
         """
+        x_dict_list = {key: [] for key in x_dict}
         for i, conv in enumerate(self.convs):
             if not neighbor_mask_edge is None and not neighbor_mask_node is None:
                 x_dict, edge_index_dict, _ = trim_to_layer_pyg(
@@ -212,12 +235,22 @@ class FastHierarchicalHeteroGraphConv(torch.nn.Module):
                     num_sampled_nodes_per_hop=neighbor_mask_node,
                     x=x_dict,
                     edge_index=edge_index_dict,
+                    edge_attr=edge_attr_dict,
                 )
             x_dict = conv(x_dict, edge_index_dict)
             if i != len(self.convs) - 1:
                 x_dict = {key: x.relu() for key, x in x_dict.items()}
                 x_dict = {key: self.layer_norms[i](x) for key, x in x_dict.items()}
                 x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
+
+            for key in x_dict.keys():
+                x_dict_list[key].append(x_dict[key])
+
+        if self.use_jk:
+            batch_sizes = {k: x_dict[k].shape[0] for k in x_dict.keys()}
+            x_dict_list = {k: [z[:batch_sizes[k]] for z in v] for k, v in x_dict_list.items()}
+            x_dict = self.jk(x_dict_list)
+
         return x_dict
 
 
@@ -261,27 +294,19 @@ class MetricalGNN(nn.Module):
         metadata (Tuple[Dict[str, int], List[Tuple[str, str]]]): Metadata of the graph
         dropout (float, optional): Dropout rate. Defaults to 0.5.
         fast (bool, optional): Whether to use FastHierarchicalHeteroGraphConv. Defaults to False.
+        remove_metrical_features: Whether to use features from metrical nodes or directly learn from neighbor features.
     """
-    def __init__(self, input_channels, hidden_channels, output_channels, num_layers, metadata, dropout=0.5, fast=False):
+    def __init__(self, input_channels, hidden_channels, output_channels, num_layers, metadata, dropout=0.5,
+                 fast=False, remove_metrical_features=False, use_jk=False):
         super(MetricalGNN, self).__init__()
         self.num_layers = num_layers
 
         if fast:
-            self.gnn = FastHierarchicalHeteroGraphConv(metadata[1], input_channels, hidden_channels, num_layers)
+            self.gnn = FastHierarchicalHeteroGraphConv(metadata, input_channels, hidden_channels, num_layers, dropout=dropout, use_jk=use_jk)
             self.fhs = True
         else:
-            self.gnn = HierarchicalHeteroGraphSage(metadata[1], input_channels, hidden_channels, num_layers)
+            self.gnn = HierarchicalHeteroGraphSage(metadata[1], input_channels, hidden_channels, num_layers, dropout=dropout)
             self.fhs = False
-        # encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_channels, nhead=8)
-        # self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=3, norm=nn.LayerNorm(hidden_channels),
-        #                                                  enable_nested_tensor=False)
-        # self.gru_model = nn.Sequential(
-        #     GRUWrapper(input_size=output_channels, hidden_size=output_channels, num_layers=1, batch_first=True),
-        #     nn.ReLU(),
-        #     nn.LayerNorm(output_channels),
-        #     nn.Dropout(dropout),
-        #     GRUWrapper(input_size=output_channels, hidden_size=output_channels, num_layers=1, batch_first=True),
-        # )
         self.mlp = nn.Sequential(
             nn.Linear(hidden_channels, hidden_channels),
             nn.ReLU(),
@@ -289,8 +314,9 @@ class MetricalGNN(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(hidden_channels, output_channels)
         )
+        self.remove_metrical_features = remove_metrical_features
 
-    def forward(self, x_dict, edge_index_dict, neighbor_mask_node=None, neighbor_mask_edge=None):
+    def forward(self, x_dict, edge_index_dict, neighbor_mask_node=None, neighbor_mask_edge=None, **kwargs):
         """
         Forward pass of the MetricalGNN model
 
@@ -303,8 +329,11 @@ class MetricalGNN(nn.Module):
         Returns:
             Tensor: Output tensor
         """
-        x_dict = self.gnn(x_dict, edge_index_dict, neighbor_mask_node, neighbor_mask_edge)
+        x_dict = self.gnn(x_dict, edge_index_dict, neighbor_mask_node=neighbor_mask_node, neighbor_mask_edge=neighbor_mask_edge)
         note = x_dict["note"]
+        if "batch_size" in kwargs:
+            batch_size = kwargs["batch_size"]
+            note = note[:batch_size]
         # Return the output
         out = self.mlp(note)
         return out
@@ -320,28 +349,18 @@ class HybridGNN(torch.nn.Module):
         hidden_channels (int): Number of hidden channels
         num_layers (int): Number of layers
         dropout (float, optional): Dropout rate. Defaults to 0.5.
+        use_jk (bool, optional): Whether to use Jumping Knowledge. Defaults to False.
+        input_edge_feature_channels (int, optional): Dimension of edge features. Defaults to None.
     """
-    def __init__(self, edge_types, input_channels, hidden_channels, num_layers, dropout=0.5):
+    def __init__(self, metadata, input_channels, hidden_channels, num_layers, dropout=0.5, use_jk=False, input_edge_feature_channels=None):
         super().__init__()
         self.num_layers = num_layers
         self.convs = torch.nn.ModuleList()
         self.layer_norms = torch.nn.ModuleList()
         self.dropout = nn.Dropout(dropout)
-        self.convs.append(
-            HeteroConv(
-                {
-                    edge_type: SAGEConv(input_channels, hidden_channels, normalize=True, project=True)
-                    for edge type in edge types
-                }, aggr='mean')
-        )
-        for _ in range(num_layers - 1):
-            conv = HeteroConv(
-                {
-                    edge type: SAGEConv(hidden_channels, hidden_channels)
-                    for edge type in edge types
-                }, aggr='mean')
-            self.convs.append(conv)
-            self.layer_norms.append(nn.LayerNorm(hidden_channels))
+        self.gnn = FastHierarchicalHeteroGraphConv(
+            metadata, input_channels, hidden_channels, num_layers, dropout=dropout,
+            use_jk=use_jk, input_edge_feature_channels=input_edge_feature_channels)
 
         self.rnn = nn.GRU(
             input_size=input_channels, hidden_size=hidden_channels // 2, num_layers=2, batch_first=True, bidirectional=True,
@@ -379,7 +398,7 @@ class HybridGNN(torch.nn.Module):
         return x
 
     def forward(self, x_dict, edge_index_dict, batch_dict, batch_size, neighbor_mask_node,
-                neighbor_mask_edge, return_edge_index=False):
+                neighbor_mask_edge, return_edge_index=False, edge_attr_dict=None):
         """
         Forward pass of the Hybrid GNN model
 
@@ -402,19 +421,10 @@ class HybridGNN(torch.nn.Module):
         batch_note = batch_dict["note"][:batch_size]
         x = self.hybrid_forward(x_note_target, batch_note)
 
-        for i, conv in enumerate(self.convs):
-            x_dict, edge_index_dict, _ = trim_to_layer_pyg(
-                layer=i,
-                num_sampled_edges_per_hop=neighbor_mask_edge,
-                num_sampled_nodes_per_hop=neighbor_mask_node,
-                x=x_dict,
-                edge_index=edge_index_dict,
-            )
-            x_dict = conv(x_dict, edge_index_dict)
-            if i != len(self.convs) - 1:
-                x_dict = {key: x.relu() for key, x in x_dict.items()}
-                x_dict = {key: self.layer_norms[i](x) for key, x in x_dict.items()}
-                x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
+        x_dict = self.gnn(
+            x_dict, edge_index_dict, edge_attr_dict=edge_attr_dict,
+            neighbor_mask_node=neighbor_mask_node, neighbor_mask_edge=neighbor_mask_edge
+        )
         x_gnn = x_dict["note"][:batch_size]
         x = self.cat_proj(torch.cat([x, x_gnn], dim=-1))
         if return_edge_index:
@@ -448,7 +458,7 @@ class HybridHGT(torch.nn.Module):
             num_layers: int,
             heads: int = 4,
             dropout: float = 0.5,
-            jk = False
+            use_jk = False
 
     ):
         super().__init__()
@@ -474,7 +484,7 @@ class HybridHGT(torch.nn.Module):
             nn.Linear(hidden_channels, hidden_channels),
         )
         self.cat_proj = nn.Linear(hidden_channels * 2, hidden_channels)
-        if jk:
+        if use_jk:
             self.jk = JumpingKnowledge(mode='lstm', channels=hidden_channels, num_layers=num_layers)
 
     def hybrid_forward(self, x, batch):
@@ -492,17 +502,15 @@ class HybridHGT(torch.nn.Module):
         lengths = torch.bincount(batch)
         x = x.split(lengths.tolist())
         x = nn.utils.rnn.pad_sequence(x, batch_first=True, padding_value=0.0)
-        x = nn.utils.rnn.pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=True)
         x, _ = self.rnn(x)
-        x, _ = nn.utils.rnn.pad_packed_sequence(x, batch_first=True, padding_value=0.0)
         x = self.rnn_norm(x)
         x = self.rnn_mlp(x)
         x = nn.utils.rnn.unpad_sequence(x, batch_first=True, lengths=lengths)
         x = torch.cat(x, dim=0)
         return x
 
-    def forward(self, x_dict, edge_index_dict, batch_dict, batch_size=None, neighbor_mask_node=None,
-                neighbor_mask_edge=None, return_edge_index=False):
+    def forward(self, x_dict, edge_index_dict, batch_dict, batch_size, neighbor_mask_node,
+                neighbor_mask_edge, return_edge_index=False, edge_attr_dict=None):
         """
         Forward pass of the Hybrid GNN model
 
