@@ -34,7 +34,7 @@ jobs:
           path: docs/_build/html
 
       - name: Trigger Read the Docs build
-        uses: readthedocs/actions@v1
+        uses: readthedocs/actions/preview@v1
         with:
           project-slug: graphmuse
           token: ${{ secrets.READTHEDOCS_TOKEN }}
