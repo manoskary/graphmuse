@@ -91,47 +91,34 @@ def random_score_region(note_onsets, budget):
 
 
 def extend_score_region_via_neighbor_sampling(cgraph, note_array, region, samples_per_node, sample_rightmost=True):
-	"""
-	Python wrapper function for C Extension function c_extend_score_region_via_neighbor_sampling
-	Samples neighbors and pre-neighbors of nodes withinin a score region such that it only considers the neighbors and pre-neighbors oustide the region
+	"""Wrap the C extension ``c_extend_score_region_via_neighbor_sampling``.
+
+	The routine samples neighbours and pre-neighbours that lie directly outside the provided
+	score region.
 
 	Parameters
 	----------
 	cgraph : Graph
-		The score graph implemented in c. It is an attribute of the HeteroScoreGraph.
-	note_array : partitura/numpy.structured array
-		This represents a score graph, as in, the data in this structure determines the edges between nodes
-		required fields: onset_div, duration_div
-		note_array['onset_div'] is a non-decreasing integer array
-		note_array['duration_div'] is an integer array
-	region : tuple
-		The region to sample from. It is a tuple of two integers, start and end.
-		The region is inclusive on the left and exclusive on the right.
+		Score graph implemented in C (attribute of :class:`HeteroScoreGraph`).
+	note_array : partitura or numpy structured array
+		Score representation. Requires ``onset_div`` and ``duration_div`` integer fields.
+	region : tuple[int, int]
+		Inclusive start and exclusive end describing the region boundaries.
 	samples_per_node : int
-		The number of samples per node.
-	sample_rightmost : bool
-		flag that determines whether or not to compute the right extension
-
-	Note: 	c_extend_score_region_via_neighbor_sampling expects 'onsets' and 'durations' to be passed in as int32 integer arrays
-			furthermore, c_extend_score_region_via_neighbor_sampling expects the cumulative maximum of 'onsets+durations'
-			furthermore, c_extend_score_region_via_neighbor_sampling expects the region to be passed as 2 separate integers
-			(see code below)
+		Number of samples drawn per node.
+	sample_rightmost : bool, optional
+		Whether to compute the right extension, by default ``True``.
 
 	Returns
 	-------
-	left_extension : Tuple()
-		(left_nodes, left_edges)
-		left_nodes: np.ndarray
-			1D array of integers. The sampled nodes.
-		left_edges: np.ndarray (2, num_edges)
-			2D array of integers. The edges. The first row contains the source nodes, the second row the destination nodes.
-	right_extension : Tuple()
-		(right_nodes, right_edges)
-		right_nodes: np.ndarray
-			1D array of integers. The sampled nodes.
-		right_edges: np.ndarray (2, num_edges)
-			2D array of integers. The edges. The first row contains the source nodes, the second row the destination nodes.
+	tuple
+		``(left_extension, right_extension)`` where each element is a tuple ``(nodes, edges)`` of
+		sampled indices and associated edge pairs.
 
+	Notes
+	-----
+	The underlying C routine expects ``onset_div`` and ``duration_div`` as ``int32`` arrays and the
+	cumulative maximum of ``onset_div + duration_div``.
 	"""
 
 	region_start, region_end = region
