@@ -72,9 +72,9 @@ Create a score graph from a MusicXML file and run a forward pass with a bundled 
    # Define the model metadata (node types and edge types)
    metadata = score_graph.metadata()
    model = MetricalGNN(
-       num_input_features=16,
-       num_hidden_features=32,
-       num_output_features=4,
+       input_channels=16,
+       hidden_channels=32,
+       output_channels=4,
        num_layers=2,
        metadata=metadata,
    )

@@ -47,9 +47,9 @@ score graphs produced with :func:`graphmuse.utils.create_random_music_graph`.
 
    metadata = graphs[0].metadata()
    model = gmnn.MetricalGNN(
-       num_input_features=feature_size,
-       num_hidden_features=32,
-       num_output_features=num_classes,
+       input_channels=feature_size,
+       hidden_channels=32,
+       output_channels=num_classes,
        num_layers=2,
        metadata=metadata,
    )
