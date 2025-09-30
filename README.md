@@ -1,3 +1,4 @@
+[![Docs](https://img.shields.io/badge/docs-readthedocs-brightgreen.svg)](https://graphmuse.readthedocs.io/)
 [![Python](https://img.shields.io/badge/-Python_3.8+-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![Pytorch](https://img.shields.io/badge/PyTorch_2.0+-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
 [![Paper](http://img.shields.io/badge/paper-arxiv.2407.12671-B31B1B.svg)](https://arxiv.org/abs/2407.12671)
