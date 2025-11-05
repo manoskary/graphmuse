@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import SAGEConv, HeteroConv, GATConv, MessagePassing, HGTConv, JumpingKnowledge, \
-    HeteroJumpingKnowledge
+from torch_geometric.nn import SAGEConv, HeteroConv, GATConv, MessagePassing, HGTConv, JumpingKnowledge
+from torch_geometric.nn.models import HeteroJumpingKnowledge
 
 from graphmuse.nn import MusGConv
 from graphmuse.utils.graph_utils import trim_to_layer
